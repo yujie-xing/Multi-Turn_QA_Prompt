@@ -1,0 +1,5 @@
+# Exclude dataset and pycache.
+
+/dataset/*
+/__pycache__/*
+data.py
