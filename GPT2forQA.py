@@ -5,6 +5,7 @@ from torch.nn import CrossEntropyLoss
 from transformers import GPT2ForTokenClassification
 from transformers.utils import add_start_docstrings_to_model_forward, add_code_sample_docstrings
 from transformers.modeling_outputs import TokenClassifierOutput
+from transformers import GPT2Model
 
 
 GPT2_INPUTS_DOCSTRING = r"""
@@ -176,9 +177,8 @@ class GPT2forQA(GPT2ForTokenClassification):
 
 		return TokenClassifierOutput(
 			loss=loss,
-			### logits=logits
-			start_logits=start_logits,
-			end_logits=end_logits,
+			## logits=logits
+			logits=(start_logits,end_logits),
 			hidden_states=transformer_outputs.hidden_states,
 			attentions=transformer_outputs.attentions,
 		)
