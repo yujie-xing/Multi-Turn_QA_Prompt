@@ -161,13 +161,16 @@ if __name__ == "__main__":
 	for qa_dict in prompted_data:
 		if qa_dict['id'] == id:
 			span = qa_dict['answer_span']
-			print(qa_dict['turn_id'])
+			print("Turn id is: {}".format(qa_dict['turn_id']))
+			print()
+			print("Use prompt positions to print prompts:")
 			for prompt_position in qa_dict['prompt_positions']:
 				print(qa_dict['context'][prompt_position[0]:prompt_position[1]])
 			print()
-			print(qa_dict['answer'])
-			print(qa_dict['context'][span[0]:span[1]])
-			print(span[0],span[1])
+			print("The original answer is: {}".format(qa_dict['original_answer']))
+			print("The answer is: {}".format(qa_dict['answer']))
+			print("Use the answer span to print the answer: {}".format(qa_dict['context'][span[0]:span[1]]))
+			print("The answer span is {} to {}".format(span[0],span[1]))
 			print()
 			print(qa_dict['context'])
 			print()
