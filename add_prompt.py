@@ -55,7 +55,7 @@ class qa_add_prompt():
 
 		for article in qa_dicts:
 
-			prompt_positions = list()
+			prompt_positions_original = list()
 			
 			for num in range(len(article)):
 				qa_dict = article[num]
@@ -72,8 +72,8 @@ class qa_add_prompt():
 
 					if span[0] != -1:
 						prompted_context = context[:span[0]] + prompt + " " + context[span[0]:span[1]] + " " + prompt + context[span[1]:]
-						prompt_positions.append((span[0],len(prompt)+1,'start'))
-						prompt_positions.append((span[1],len(prompt)+1,'end')) # -> (start, prompt_length) and (end, prompt_length)
+						prompt_positions_original.append((span[0],len(prompt)+1,'start'))
+						prompt_positions_original.append((span[1],len(prompt)+1,'end')) # -> (start, prompt_length) and (end, prompt_length)
 					else:
 						prompted_context = context
 
@@ -82,13 +82,13 @@ class qa_add_prompt():
 					qa_dict['context'] = prompted_context[:]
 					qa_dict['original_answer'] = qa_dict['answer']
 					## context[prompt_start, prompt_end] =  prompt
-					qa_dict['prompt_positions'] = self.calc_new_prompt_positions(prompt_positions)
+					qa_dict['prompt_positions'] = self.calc_prompt_positions(prompt_positions_original)
 
 					if span[0] != -1:
 
 						start_diff = 0
 						end_diff = 0
-						for prompt_position in prompt_positions:
+						for prompt_position in prompt_positions_original:
 							if prompt_position[0] <= span[0]:  ## <= makes <1> <2> <3> instead of <3> <2> <1>
 								start_diff += prompt_position[1]
 
@@ -102,8 +102,8 @@ class qa_add_prompt():
 						prompted_dicts.append(qa_dict)
 
 						prompted_context = prompted_context[:new_span[0]] + prompt + " " + prompted_context[new_span[0]:new_span[1]] + " " + prompt + prompted_context[new_span[1]:]
-						prompt_positions.append((span[0],len(prompt)+1,'start'))
-						prompt_positions.append((span[1],len(prompt)+1,'end')) # -> (start, prompt_length) and (end, prompt_length) of the original context
+						prompt_positions_original.append((span[0],len(prompt)+1,'start'))
+						prompt_positions_original.append((span[1],len(prompt)+1,'end')) # -> (start, prompt_length) and (end, prompt_length) of the original context
 					
 					else:
 						prompted_dicts.append(qa_dict)
@@ -112,34 +112,28 @@ class qa_add_prompt():
 
 
 
-	def calc_new_prompt_positions(self, prompt_positions):
+	def calc_prompt_positions(self, prompt_positions_original):
 
-		new_prompt_positions = list()
+		prompt_positions = list()
 
-		if len(prompt_positions) == 0:
-			return new_prompt_positions
+		if len(prompt_positions_original) == 0:
+			return prompt_positions
 
-		prompt_positions.sort(key = lambda x: x[0])
-		prompt = prompt_positions[0]
-		# if prompt[2] == 'end':
-		# 	prompt = (prompt[0]+1, prompt[0]+prompt[1], prompt[2])
-		# elif prompt[2] == 'start':
+		prompt_positions_original.sort(key = lambda x: x[0])
+		prompt = prompt_positions_original[0]
 		prompt = (prompt[0], prompt[0]+prompt[1], prompt[2])
-		new_prompt_positions.append(prompt)
+		prompt_positions.append(prompt)
 
 
-		for num in range(1,len(prompt_positions)):
-			prompt =  prompt_positions[num]
-			for previous_prompt in prompt_positions[:num]:
+		for num in range(1,len(prompt_positions_original)):
+			prompt =  prompt_positions_original[num]
+			for previous_prompt in prompt_positions_original[:num]:
 				prompt = (prompt[0]+previous_prompt[1], prompt[1],prompt[2])
 			
-			# if prompt[2] == 'end':
-			# 	prompt = (prompt[0]+1, prompt[0]+prompt[1], prompt[2])
-			# elif prompt[2] == 'start':
 			prompt = (prompt[0], prompt[0]+prompt[1], prompt[2])
-			new_prompt_positions.append(prompt)
+			prompt_positions.append(prompt)
 
-		return new_prompt_positions
+		return prompt_positions
 
 
 
@@ -157,7 +151,7 @@ if __name__ == "__main__":
 	prompts = qa_add_prompt(path)
 	prompted_data = prompts.prompted_data()
 	
-	id = prompted_data[0]['id']
+	id = prompted_data[100]['id']
 	for qa_dict in prompted_data:
 		if qa_dict['id'] == id:
 			span = qa_dict['answer_span']
@@ -167,10 +161,10 @@ if __name__ == "__main__":
 			for prompt_position in qa_dict['prompt_positions']:
 				print(qa_dict['context'][prompt_position[0]:prompt_position[1]])
 			print()
-			print("The original answer is: {}".format(qa_dict['original_answer']))
-			print("The answer is: {}".format(qa_dict['answer']))
-			print("Use the answer span to print the answer: {}".format(qa_dict['context'][span[0]:span[1]]))
-			print("The answer span is {} to {}".format(span[0],span[1]))
+			print("Original answer: \n{}".format(qa_dict['original_answer']))
+			print("Answer: \n{}".format(qa_dict['answer']))
+			print("Answer span: \n{}".format(qa_dict['context'][span[0]:span[1]]))
+			print("Answer span: {} to {}".format(span[0],span[1]))
 			print()
 			print(qa_dict['context'])
 			print()
