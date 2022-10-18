@@ -1,4 +1,13 @@
+import json
 from add_prompt import *
+
+
+def load_train_dev_data(path):
+	with open(path) as file:
+		data = json.load(file)
+
+	return data
+
 
 
 class qa_data(qa_add_prompt):

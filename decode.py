@@ -15,8 +15,6 @@ class decode_QA():
 		self.search_size = search_size
 		
 
-
-
 	def decode(self):
 
 		qa_dicts = self.data.qa_dicts
@@ -71,7 +69,7 @@ class decode_QA():
 		for i in range(start_values.shape[0]):
 			start_value = start_values[i]
 			start_indice = start_indices[i]
-			for j in range(end values.shape[0]):
+			for j in range(end_values.shape[0]):
 				end_value = end_values[j]
 				end_indice = end_indices[j]
 				value = start_value + end_value
@@ -109,18 +107,21 @@ if __name__ == "__main__":
 	GPT2Config = AutoConfig.from_pretrained("gpt2")
 
 	model = GPT2forQA(GPT2Config)
+	# model.resize_token_embeddings(len(tokenizer))
 	model.transformer = AutoModel.from_pretrained("gpt2")
 
 	# for param in model.transformer.parameters():
 	#     param.requires_grad = False
 
-	# input = torch.empty((3,5), dtype=torch.long).random_(100)
+	# input_ids = torch.empty((3,5), dtype=torch.long).random_(100)
+	# attention_mask = torch.empty((3,5), dtype=torch.long).random_(1)
+
 	# start_labels = torch.empty(3, dtype=torch.long).random_(5)
 	# end_labels = torch.empty(3, dtype=torch.long).random_(5)
 
 	# optimizer = AdamW(model.parameters(), lr=5e-5)
 
-	# loss = model(input_ids=input,token_type_ids=None,start_labels=start_labels,end_labels=end_labels).loss
+	# loss = model(input_ids=input_ids,attention_mask=attention_mask,token_type_ids=None,start_labels=start_labels,end_labels=end_labels).loss
 	# loss.backward()
 	# optimizer.step()
 
