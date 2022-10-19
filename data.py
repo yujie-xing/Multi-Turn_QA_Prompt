@@ -9,6 +9,93 @@ def load_train_dev_data(path):
 	return data
 
 
+def prepare_train_features(dataset, tokenizer, max_length, doc_stride):
+
+    # Tokenize our examples with truncation and padding, but keep the overflows using a stride. This results
+    # in one example possible giving several features when a context is long, each of those features having a
+    # context that overlaps a bit the context of the previous feature.
+    
+    eos_id = tokenizer.eos_token_id
+    tokenized_examples = {"input_ids":list(),"attention_mask":list(),"token_type_ids":list(),"start_labels":list(),"end_labels":list()}
+    
+    for example in dataset:
+        
+        tokenized_example = tokenizer(
+            example["question"],
+            example["context"],
+            max_length=max_length,
+            truncation='only_second',
+            return_overflowing_tokens=True,
+            return_offsets_mapping=True,
+            stride=doc_stride,
+            padding="max_length",
+        )
+
+        # The offset mappings will give us a map from token to character position in the original context. This will
+        # help us compute the start_positions and end_positions.
+        offset_mapping = tokenized_example.pop("offset_mapping")
+
+        for i, offsets in enumerate(offset_mapping):
+            
+            sequence_ids = tokenized_example.sequence_ids(i)
+            
+            # Add en eos token in the middle.
+            
+            eos_index = 0
+            while sequence_ids[eos_index] != 1:
+                eos_index += 1
+                
+            input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:]
+            attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:]
+            sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
+            offsets = offsets[:eos_index] + [(-1,-1)] + offsets[eos_index:]
+            
+            
+            tokenized_examples["input_ids"].append(input_ids)
+            tokenized_examples["attention_mask"].append(attention_mask)
+            tokenized_examples["token_type_ids"].append([id if id is not None else 1 for id in sequence_ids])
+            
+            # We will label impossible answers with the index of the eos token.
+
+            assert eos_index == input_ids.index(eos_id)
+
+            answer_span = example["answer_span"]
+            # If no answers are given, set the cls_index as answer.
+            if answer_span[0] == -1:
+    #             raise Exception("The answer span does not exist.")
+                tokenized_examples["start_labels"].append(eos_index)
+                tokenized_examples["end_labels"].append(eos_index)
+            else:
+                # Start/end character index of the answer in the text.
+                start_char = answer_span[0]
+                end_char = answer_span[1]
+
+                # Start token index of the current span in the text.
+                token_start_index = eos_index + 1
+
+                # End token index of the current span in the text.
+                token_end_index = len(input_ids) - 1
+                while sequence_ids[token_end_index] != 1:
+                    token_end_index -= 1
+
+                # Detect if the answer is out of the span (in which case this feature is labeled with the eos index).
+                if not (offsets[token_start_index][0] <= start_char and offsets[token_end_index][1] >= end_char):
+    #                 raise Exception("The answer span does not fall in the context.")
+                    tokenized_examples["start_labels"].append(eos_index)
+                    tokenized_examples["end_labels"].append(eos_index)
+                else:
+                    # Otherwise move the token_start_index and token_end_index to the two ends of the answer.
+                    # Note: we could go after the last offset if the answer is the last word (edge case).
+                    while token_start_index < len(offsets) and offsets[token_start_index][0] <= start_char:
+                        token_start_index += 1
+                    tokenized_examples["start_labels"].append(token_start_index - 1)
+                    while offsets[token_end_index][1] >= end_char:
+                        token_end_index -= 1
+                    tokenized_examples["end_labels"].append(token_end_index + 1)
+
+    return tokenized_examples
+
+
 
 class qa_data(qa_add_prompt):
 

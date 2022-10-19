@@ -2,3 +2,7 @@
 
 /dataset/*
 /__pycache__/*
+/gpt2-finetuned-test/*
+.ipynb_checkpoints/*
+Question_Answering_on_SQUAD.ipynb
+util.py
