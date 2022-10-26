@@ -10,7 +10,6 @@ class generate_QA():
 
 	def __init__(self, args, dataargs):
 
-		self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 		self.args = args
 		self.dataargs = dataargs
 
@@ -101,7 +100,7 @@ class generate_QA():
 			output.write("\n")
 			output.write(qa_dict['original_answer'])
 			output.write("\n")
-			output.write("\n")
+			output.write("=============================\n")
 
 
 
@@ -112,10 +111,9 @@ if __name__ == "__main__":
 	# Parser -> args
 	try:
 		parser = HfArgumentParser((DataArguments,TrainingArguments))
-		parser.add_argument('--batch_size', type=int, default=0, help='a simpler way to change both train and eval batch size')
 		dataargs, args = parser.parse_args_into_dataclasses()
-		if args.batch_size != 0:
-			args.per_device_eval_batch_size = args.batch_size
+		if dataargs.batch_size != 0:
+			args.per_device_eval_batch_size = dataargs.batch_size
 		print(args)
 		print(dataargs)
 	except:  ## Only for test
@@ -126,10 +124,11 @@ if __name__ == "__main__":
 		except:
 			pass
 		dataargs = DataArguments(test_path='dataset/coqa-dev-prompted.json', tokenizer_path='test/tokenizer', model_path='test')
+		print("Test Mode")
 		print(args)
 		print(dataargs)
 
 
 	#============================
 	QA_model = generate_QA(args, dataargs)
-	QA_model.evaluate()
+	QA_model.decode()

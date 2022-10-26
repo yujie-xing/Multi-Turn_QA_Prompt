@@ -1,6 +1,7 @@
 
 from os import path, mkdir
 import json, pickle
+import torch
 import transformers
 from transformers import HfArgumentParser, TrainingArguments
 from transformers import AutoTokenizer, AutoModel, AutoConfig
@@ -11,11 +12,10 @@ from GPT2forQA import *
 # Parser -> args
 try:
 	parser = HfArgumentParser((DataArguments,TrainingArguments))
-	parser.add_argument('--batch_size', type=int, default=0, help='a simpler way to change both train and eval batch size')
 	dataargs, args = parser.parse_args_into_dataclasses()
-	if args.batch_size != 0:
-		args.per_device_train_batch_size = args.batch_size
-		args.per_device_eval_batch_size = args.batch_size
+	if dataargs.batch_size != 0:
+		args.per_device_train_batch_size = dataargs.batch_size
+		args.per_device_eval_batch_size = dataargs.batch_size
 	print(args)
 	print(dataargs)
 except:  ## Only for test
@@ -26,9 +26,10 @@ except:  ## Only for test
 	except:
 		pass
 	dataargs = DataArguments(train_path="dataset/coqa-train-prompted.json",dev_path="dataset/coqa-dev-prompted.json",test_path=None)
+	print("Test Mode")
 	print(args)
 	print(dataargs)
-
+	
 # Save args
 with open (path.join(args.output_dir,"args.pkl"),'wb') as f:
 	pickle.dump(args,f)
@@ -38,6 +39,9 @@ print("\nArgs file saved in {} and {}\n".format(path.join(args.output_dir,"args.
 
 
 #===============================
+
+print(torch.cuda.is_available())
+
 # Initialize data processor
 data_processor = train_data()
 train_dataset = data_processor.load(dataargs.train_path)

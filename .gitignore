@@ -1,9 +1,13 @@
-# Exclude dataset and pycache.
+# Exclude dataset, trained models and temporary files.
 
 /dataset/*
 /__pycache__/*
 .ipynb_checkpoints/*
-test/*
-test_output/*
+/test/*
+/test_output/*
 Question_Answering_on_SQUAD.ipynb
-util.py
+*.out
+requirements
+/prompt_QA_coqa/*
+/news/*
+/transformers/
