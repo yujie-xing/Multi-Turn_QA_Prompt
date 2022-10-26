@@ -6,6 +6,7 @@ from transformers import GPT2ForTokenClassification
 from transformers.utils import add_start_docstrings_to_model_forward, add_code_sample_docstrings
 from transformers.modeling_outputs import TokenClassifierOutput
 from transformers import GPT2Model
+from transformers import Trainer
 
 
 GPT2_INPUTS_DOCSTRING = r"""
@@ -182,7 +183,15 @@ class GPT2forQA(GPT2ForTokenClassification):
 			hidden_states=transformer_outputs.hidden_states,
 			attentions=transformer_outputs.attentions,
 		)
+		
 
+class QATrainer(Trainer):
+	def compute_loss(self, model, inputs, return_outputs=False):
+		# forward pass
+		outputs = model(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'], token_type_ids=inputs['token_type_ids'], start_labels=inputs['start_labels'], end_labels=inputs['end_labels'])
+		loss = outputs.get("loss")
+		# compute custom loss (suppose one has 3 labels with different weights)
+		return (loss, outputs) if return_outputs else loss
 
 
 

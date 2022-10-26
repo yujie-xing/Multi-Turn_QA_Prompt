@@ -64,24 +64,28 @@ class qa_add_prompt():
 				prompt = "<" + str(turn_id) + ">"
 				
 				if num == 0:
-					context = qa_dict['context']
+					original_context = qa_dict['context']
+					qa_dict['original_context'] = original_context
 					qa_dict['original_answer'] = qa_dict['answer']
+					qa_dict['prompt_positions_original'] = list()
 					qa_dict['prompt_positions'] = list() # Record where the start of a prompt is in the prompted context
 					
 					prompted_dicts.append(qa_dict)
 
 					if span[0] != -1:
-						prompted_context = context[:span[0]] + prompt + " " + context[span[0]:span[1]] + " " + prompt + context[span[1]:]
+						prompted_context = original_context[:span[0]] + prompt + " " + original_context[span[0]:span[1]] + " " + prompt + original_context[span[1]:]
 						prompt_positions_original.append((span[0],len(prompt)+1,'start'))
 						prompt_positions_original.append((span[1],len(prompt)+1,'end')) # -> (start, prompt_length) and (end, prompt_length)
 					else:
-						prompted_context = context
+						prompted_context = original_context
 
 
 				else:
+					qa_dict['original_context'] = original_context
 					qa_dict['context'] = prompted_context[:]
 					qa_dict['original_answer'] = qa_dict['answer']
 					## context[prompt_start, prompt_end] =  prompt
+					qa_dict['prompt_positions_original'] = prompt_positions_original.copy()
 					qa_dict['prompt_positions'] = self.calc_prompt_positions(prompt_positions_original)
 
 					if span[0] != -1:

@@ -1,131 +1,135 @@
-from GPT2forQA import *
-from data import *
+from os import path
 import torch
-import numpy as np
+from transformers import AutoTokenizer, Trainer, TrainingArguments
+from GPT2forQA import *
+from data import DataArguments, decode_data
 
 
-class decode_QA():
 
-	def __init__(self, data_path, model, output_path, search_size = 10):
+class generate_QA():
+
+	def __init__(self, args, dataargs):
 
 		self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-		self.data = qa_data(data_path)
-		self.model = model.to(self.device)
-		self.output = output_path
-		self.search_size = search_size
+		self.args = args
+		self.dataargs = dataargs
+
+		# Initialize tokenizer
+		self.tokenizer = AutoTokenizer.from_pretrained(dataargs.tokenizer_path)
+		# Initialize model
+		model = GPT2forQA.from_pretrained(dataargs.model_path)
+		self.predictor = QATrainer(model, self.args)
+
+		with open(path.join(self.args.output_dir,'output.txt'), 'w') as output:
+			output.write("")
+
 		
 
 	def decode(self):
 
-		qa_dicts = self.data.qa_dicts
+		decode_data_processor = decode_data()
+
+		qa_dicts = decode_data_processor.data_to_dicts(self.dataargs.test_path)
 
 		for qa_list in qa_dicts:
 
-			qa_dict = qa_list[0]
-			input_ids, token_type_ids = preprocess_decode(qa_dict)  ### Need to be implemented.
-			with torch.no_grad():
-				input_ids = input_ids.to(self.device)
-				token_type_ids = token_type_ids.to(self.device)
-				start_logits,end_logits = model(input_ids=input_ids,token_type_ids=token_type_ids).logits
-			start_values, start_indices = start_logits.topk(self.search_size,dim=-1)
-			end_values, end_indices = end_logits.topk(self.search_size,dim=-1)
-			predicted_start, predicted_end = self.search(start_values, start_indices, end_values, end_indices)
-			predicted_span = id_to_span(predicted_start, predicted_end) ### Need to be implemented.
-			previous_qa_dict = qa_dict
+			predicted_span = None
+			previous_qa_dict = None
 
-			self.write(qa_dict, predicted_span)
+			original_context = qa_list[0]['context']
 
-
-			for qa_dict in qa_list[1:]:
-				qa_dict = self.data.add_prompt_decode(qa_dict, predicted_span, previous_qa_dict)
-				input_ids, token_type_ids, prompt_positions = preprocess_decode(qa_dict)  ### Need to be implemented.
-				with torch.no_grad():
-					input_ids = input_ids.to(self.device)
-					token_type_ids = token_type_ids.to(self.device)		
-					start_logits,end_logits = model(input_ids=input_ids,token_type_ids=token_type_ids).logits
-				for prompt in prompt_positions:
-					start_logits[prompt] = float("-Inf")
-					end_logits[prompt] = float("-Inf")
-				start_values, start_indices = start_logits.topk(self.search_size,dim=-1)
-				end_values, end_indices = end_logits.topk(self.search_size,dim=-1)
-				predicted_start, predicted_end = self.search(start_values, start_indices, end_values, end_indices)
-				predicted_span = id_to_span(predicted_start, predicted_end) ### Need to be implemented.
+			for i, qa_dict in enumerate(qa_list):
+				qa_dict = decode_data_processor.add_prompt_decode(qa_dict, predicted_span, previous_qa_dict)
+				tokenized_qa_dict = decode_data_processor.preprocess([qa_dict], self.tokenizer, self.dataargs.max_length, self.dataargs.doc_stride)
+				start_logits,end_logits = self.predictor.predict(tokenized_qa_dict).predictions
+				predicted_span, predicted_score = decode_data_processor.postprocess([qa_dict], tokenized_qa_dict, start_logits, end_logits, self.dataargs.search_size, self.dataargs.max_answer_length)
+				predicted_span_original = decode_data_processor.calc_original_span_positions(qa_dict['prompt_positions_original'],predicted_span)
 				previous_qa_dict = qa_dict
 
-				self.write(qa_dict, predicted_span)
-
-
-	def search(self, start_value, start_indices, end_values, end_indices):
-
-		start_values = start_values.cpu().numpy()
-		start_indices = start_indices.cpu().numpy()
-		end_values = end_value.cpu().numpy()
-		end_indices = end_indices.cpu().numpy()
-
-		predicted_start = 0
-		predicted_end = 0
-		predicted_value = 0
-
-		for i in range(start_values.shape[0]):
-			start_value = start_values[i]
-			start_indice = start_indices[i]
-			for j in range(end_values.shape[0]):
-				end_value = end_values[j]
-				end_indice = end_indices[j]
-				value = start_value + end_value
-				if start_indice < end_indice and value > predicted_value:
-					predicted_start = start_indice
-					predicted_end = end_indice
-					predicted_value = value
-
-		return predicted_start, predicted_end
+				self.write(qa_dict, predicted_span, predicted_score, predicted_span_original, original_context)
 
 
 
 
+	def evaluate(self):   ## For evaluation of prompted test dataset.
 
-	def write(self, qa_dict, predicted_span):
-		with open(self.output, 'w') as output:
+		eval_data_processor = decode_data()
+
+		test_dataset = eval_data_processor.load(self.dataargs.test_path)
+
+		# Tokenize dataset & prepared labels
+		tokenized_test_dataset = eval_data_processor.preprocess(test_dataset, self.tokenizer, self.dataargs.max_length, self.dataargs.doc_stride)
+
+		start_logits, end_logits = self.predictor.predict(tokenized_test_dataset).predictions
+		predicted_spans, predicted_scores = eval_data_processor.postprocess(test_dataset, tokenized_test_dataset, start_logits, end_logits, self.dataargs.search_size, self.dataargs.max_answer_length)
+
+		predicted_spans_original = list()
+		for i, predicted_span in enumerate(predicted_spans):
+			predicted_span_original = eval_data_processor.calc_original_span_positions(test_dataset[i]['prompt_positions_original'],predicted_span)
+			predicted_spans_original.append(predicted_span_original)
+				
+		for i, qa_dict in enumerate(test_dataset):
+			self.write(qa_dict, predicted_spans[i], predicted_scores[i], predicted_spans_original[i], qa_dict['original_context'])
+
+
+
+	def write(self, qa_dict, predicted_span, predicted_score, predicted_span_original, original_context):
+		with open(path.join(self.args.output_dir,'output.txt'), 'a') as output:
 			output.write(qa_dict['id'])
-			output.write(qa_dict['turn_id'])
+			output.write("\n")
+			output.write(str(qa_dict['turn_id']))
+			output.write("\n")
 			output.write(qa_dict['question'])
-			output.write(predicted_span[0], predicted_span[1])
+			output.write("\n")
+			output.write(str(predicted_span[0]))
+			output.write(",")
+			output.write(str(predicted_span[1]))
+			output.write("\n")
 			output.write(qa_dict['context'][predicted_span[0]:predicted_span[1]])
-			output.write(qa_dict['answer_span'][0], qa_dict['answer_span'][1])
+			output.write("\n")
+			output.write(str(predicted_span_original[0]))
+			output.write(",")
+			output.write(str(predicted_span_original[1]))
+			output.write("\n")
+			output.write(original_context[predicted_span_original[0]:predicted_span_original[1]])
+			output.write("\n")
+			output.write(str(qa_dict['answer_span'][0]))
+			output.write(",")
+			output.write(str(qa_dict['answer_span'][1]))
+			output.write("\n")
 			output.write(qa_dict['answer'])
-			output.write()
+			output.write("\n")
+			output.write(qa_dict['original_answer'])
+			output.write("\n")
+			output.write("\n")
 
 
 
 
 if __name__ == "__main__":
 
-	import torch
-	# from torch.optim import AdamW
-	from transformers import AutoModel, AutoConfig
-
-	GPT2Config = AutoConfig.from_pretrained("gpt2")
-
-	model = GPT2forQA(GPT2Config)
-	# model.resize_token_embeddings(len(tokenizer))
-	model.transformer = AutoModel.from_pretrained("gpt2")
-
-	# for param in model.transformer.parameters():
-	#     param.requires_grad = False
-
-	# input_ids = torch.empty((3,5), dtype=torch.long).random_(100)
-	# attention_mask = torch.empty((3,5), dtype=torch.long).random_(1)
-
-	# start_labels = torch.empty(3, dtype=torch.long).random_(5)
-	# end_labels = torch.empty(3, dtype=torch.long).random_(5)
-
-	# optimizer = AdamW(model.parameters(), lr=5e-5)
-
-	# loss = model(input_ids=input_ids,attention_mask=attention_mask,token_type_ids=None,start_labels=start_labels,end_labels=end_labels).loss
-	# loss.backward()
-	# optimizer.step()
+	#===============================
+	# Parser -> args
+	try:
+		parser = HfArgumentParser((DataArguments,TrainingArguments))
+		parser.add_argument('--batch_size', type=int, default=0, help='a simpler way to change both train and eval batch size')
+		dataargs, args = parser.parse_args_into_dataclasses()
+		if args.batch_size != 0:
+			args.per_device_eval_batch_size = args.batch_size
+		print(args)
+		print(dataargs)
+	except:  ## Only for test
+		print("\n======================\n")
+		args = TrainingArguments(output_dir="test_output")
+		try:
+			mkdir("test_output")
+		except:
+			pass
+		dataargs = DataArguments(test_path='dataset/coqa-dev-prompted.json', tokenizer_path='test/tokenizer', model_path='test')
+		print(args)
+		print(dataargs)
 
 
-	# for param in model.classifier.parameters():
-	# 	print(param)
-	# 	break
+	#============================
+	QA_model = generate_QA(args, dataargs)
+	QA_model.evaluate()
