@@ -1,6 +1,6 @@
 from os import path
 import torch
-from transformers import AutoTokenizer, Trainer, TrainingArguments
+from transformers import AutoTokenizer, Trainer
 from GPT2forQA import *
 from data import DataArguments, decode_data
 
@@ -107,6 +107,8 @@ class generate_QA():
 
 if __name__ == "__main__":
 
+	from transformers import HfArgumentParser, TrainingArguments
+
 	#===============================
 	# Parser -> args
 	try:
@@ -114,6 +116,10 @@ if __name__ == "__main__":
 		dataargs, args = parser.parse_args_into_dataclasses()
 		if dataargs.batch_size != 0:
 			args.per_device_eval_batch_size = dataargs.batch_size
+		try:
+			mkdir(args.output_dir)
+		except:
+			pass
 		print(args)
 		print(dataargs)
 	except:  ## Only for test

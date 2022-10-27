@@ -30,17 +30,8 @@ except:  ## Only for test
 	print(args)
 	print(dataargs)
 	
-# Save args
-with open (path.join(args.output_dir,"args.pkl"),'wb') as f:
-	pickle.dump(args,f)
-with open (path.join(args.output_dir,"dataargs.pkl"),'wb') as f:
-	pickle.dump(dataargs,f)
-print("\nArgs file saved in {} and {}\n".format(path.join(args.output_dir,"args.pkl"),path.join(args.output_dir,"dataargs.pkl")))
-
 
 #===============================
-
-print(torch.cuda.is_available())
 
 # Initialize data processor
 data_processor = train_data()
@@ -85,9 +76,18 @@ trainer = QATrainer(
 trainer.train()
 
 #===============================
-# Save model & tokenizer & log
+# Save model & tokenizer
 trainer.save_model()
 tokenizer.save_pretrained(path.join(args.output_dir,"tokenizer"))
+
+# Save args
+with open (path.join(args.output_dir,"args.pkl"),'wb') as f:
+	pickle.dump(args,f)
+with open (path.join(args.output_dir,"dataargs.pkl"),'wb') as f:
+	pickle.dump(dataargs,f)
+print("\nArgs file saved in {} and {}\n".format(path.join(args.output_dir,"args.pkl"),path.join(args.output_dir,"dataargs.pkl")))
+
+# Save log
 with open (path.join(args.output_dir,"log.json"),'w') as f:
 	json.dump(trainer.state.log_history,f)
 print("Log history file saved in {}".format(path.join(args.output_dir,"log.json")))
