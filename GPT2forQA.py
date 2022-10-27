@@ -1,5 +1,6 @@
 from typing import Optional, Tuple, Union
 from os import path
+import json
 import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
@@ -209,9 +210,12 @@ class generate_QA():
 		# Initialize model
 		model = GPT2forQA.from_pretrained(dataargs.model_path)
 		self.predictor = QATrainer(model, self.args)
+		self.output_path = path.join(self.args.output_dir,self.dataargs.output_file)
 
-		with open(path.join(self.args.output_dir,'output.txt'), 'w') as output:
+		with open(self.output_path, 'w') as output:
 			output.write("")
+			
+		print("Output to {}.\n".format(self.output_path))
 
 		
 
@@ -220,6 +224,8 @@ class generate_QA():
 		decode_data_processor = decode_data()
 
 		qa_dicts = decode_data_processor.data_to_dicts(self.dataargs.test_path)
+		
+		answer_list = list()
 
 		for qa_list in qa_dicts:
 
@@ -235,8 +241,12 @@ class generate_QA():
 				predicted_span, predicted_score = decode_data_processor.postprocess([qa_dict], tokenized_qa_dict, start_logits, end_logits, self.dataargs.search_size, self.dataargs.max_answer_length)
 				predicted_span_original = decode_data_processor.calc_original_span_positions(qa_dict['prompt_positions_original'],predicted_span)
 				previous_qa_dict = qa_dict
+				
+				answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "answer": original_context[predicted_span_original[0]:predicted_span_original[1]]})
 
-				self.write(qa_dict, predicted_span, predicted_score, predicted_span_original, original_context)
+#				self.write(qa_dict, predicted_span, predicted_score, predicted_span_original, original_context)
+
+		self.write_coqa_answer(answer_list)
 
 
 
@@ -246,6 +256,8 @@ class generate_QA():
 		eval_data_processor = decode_data()
 
 		test_dataset = eval_data_processor.load(self.dataargs.test_path)
+		
+		answer_list = list()
 
 		# Tokenize dataset & prepared labels
 		tokenized_test_dataset = eval_data_processor.preprocess(test_dataset, self.tokenizer, self.dataargs.max_length, self.dataargs.doc_stride)
@@ -259,12 +271,21 @@ class generate_QA():
 			predicted_spans_original.append(predicted_span_original)
 				
 		for i, qa_dict in enumerate(test_dataset):
-			self.write(qa_dict, predicted_spans[i], predicted_scores[i], predicted_spans_original[i], qa_dict['original_context'])
+			answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "answer": qa_dict['original_context'][predicted_spans_original[i][0]:predicted_spans_original[i][1]]})
+#			self.write(qa_dict, predicted_spans[i], predicted_scores[i], predicted_spans_original[i], qa_dict['original_context'])
+		
+		self.write_coqa_answer(answer_list)
+			
+			
+			
+	def write_coqa_answer(self, answer_list):
+		with open(self.output_path,'w') as f:
+			json.dump(answer_list,f)
 
 
 
 	def write(self, qa_dict, predicted_span, predicted_score, predicted_span_original, original_context):
-		with open(path.join(self.args.output_dir,'output.txt'), 'a') as output:
+		with open(self.output_path, 'a') as output:
 			output.write(qa_dict['id'])
 			output.write("\n")
 			output.write(str(qa_dict['turn_id']))

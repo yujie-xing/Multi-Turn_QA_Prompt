@@ -21,6 +21,9 @@ class DataArguments:
 	test_path: str = field(
 		default=None,
 		metadata={"help": "The input test data file (json)."})
+	output_file: str = field(
+		default="output.txt",
+		metadata={"help": "The name of the output file."})
 	batch_size: Optional[int] = field(
 		default=0,
 		metadata={"help": "a simpler way to change both train and eval batch size."})
