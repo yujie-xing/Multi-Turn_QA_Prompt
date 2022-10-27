@@ -42,6 +42,12 @@ class DataArguments:
 	max_answer_length: Optional[int] = field(
 		default=None,
 		metadata={"help": "The max length for question and context. Defaulted to model max length -1."})
+	evaluate: bool = field(
+		default=False,
+		metadata={"help": "Run evaluation with a prompted dataset"})
+	decode: bool = field(
+		default=False,
+		metadata={"help": "Decode on a test dataset"})
 
 
 
