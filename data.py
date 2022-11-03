@@ -380,16 +380,16 @@ class decode_data(train_data):
 
 			predicted_spans = []
 			predicted_scores = []
-			prompt_chars = set()
+			prompt_chars = list()
 
 			prompt_positions = qa_dict['prompt_positions']
 			for prompt in prompt_positions:
 				if prompt[2] == 'start':
 					for prompt_char in range(prompt[0],prompt[1]):
-						prompt_chars.add(prompt_char)
+						prompt_chars.append(prompt_char)
 				elif prompt[2] == 'end':
-					for prompt_char in range(prompt[0]+1,prompt[1]+1):
-						prompt_chars.add(prompt_char)
+					for prompt_char in range(prompt[0],prompt[1]):
+						prompt_chars.append(prompt_char)
 
 			# Looping through all the features associated to the current example.
 			for tokenized_index in tokenized_indices:
@@ -429,6 +429,8 @@ class decode_data(train_data):
 
 						start_char = offset_mapping[start_index][0]
 						end_char = offset_mapping[end_index][1]
+						if qa_dict['context'][start_char] == " ":
+							start_char += 1
 
 						if start_char in prompt_chars or end_char in prompt_chars:
 							continue
@@ -449,7 +451,7 @@ class decode_data(train_data):
 				span = (-1,-1)
 				score = max(predicted_scores)
 				predicted_scores = array(predicted_scores)
-				best_score_index = argsort(predicted_scores)[::-1]
+				best_score_index = argsort(predicted_scores)
 				for score_index in best_score_index:
 					if predicted_spans[score_index] != (-1,-1):
 						span = predicted_spans[score_index]
