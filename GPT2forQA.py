@@ -90,13 +90,13 @@ class GPT2forQA(GPT2ForTokenClassification):
 		self.num_labels = 2  # Only need 2 labels: start and end
 
 		self.transformer = GPT2Model(config)
-		if hasattr(config, "classifier_dropout") and config.classifier_dropout is not None:
-			classifier_dropout = config.classifier_dropout
-		elif hasattr(config, "hidden_dropout") and config.hidden_dropout is not None:
-			classifier_dropout = config.hidden_dropout
-		else:
-			classifier_dropout = 0.1
-		self.dropout = nn.Dropout(classifier_dropout)
+#		if hasattr(config, "classifier_dropout") and config.classifier_dropout is not None:
+#			classifier_dropout = config.classifier_dropout
+#		elif hasattr(config, "hidden_dropout") and config.hidden_dropout is not None:
+#			classifier_dropout = config.hidden_dropout
+#		else:
+#			classifier_dropout = 0.1
+#		self.dropout = nn.Dropout(classifier_dropout)
 		
 		### self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 		self.classifier = nn.Linear(config.hidden_size, self.num_labels)  # Only need 2 labels: start and end

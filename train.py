@@ -1,5 +1,5 @@
 
-from os import path, mkdir
+from os import path, mkdir, environ
 import json, pickle
 import torch
 import transformers
@@ -34,6 +34,7 @@ except:  ## Only for test
 #===============================
 
 # Initialize data processor
+
 data_processor = train_data()
 train_dataset = data_processor.load(dataargs.train_path)
 dev_dataset = data_processor.load(dataargs.dev_path)
@@ -47,6 +48,8 @@ tokenizer.add_special_tokens(special_tokens_dict)
 tokenized_train_dataset = data_processor.preprocess(train_dataset, tokenizer, dataargs.max_length, dataargs.doc_stride)
 tokenized_dev_dataset = data_processor.preprocess(dev_dataset, tokenizer, dataargs.max_length, dataargs.doc_stride)
 
+print("data tokenized")
+
 #===============================
 # Initialize config
 config = AutoConfig.from_pretrained(dataargs.model_path)
@@ -54,14 +57,15 @@ config.pad_token_id = tokenizer.pad_token_id
 config.eos_token_id = tokenizer.eos_token_id
 
 # Initialize model
-model = GPT2forQA(config)
-model.transformer = AutoModel.from_pretrained(dataargs.model_path)
+model = GPT2forQA(config).from_pretrained(dataargs.model_path)
 model.resize_token_embeddings(len(tokenizer))
 
 # Fix main weights in the model
 for param in model.transformer.parameters():
 	param.requires_grad = False
+model.transformer.wte.weight[tokenizer.pad_token_id]=0
 
+print("model initialized")
 
 #===============================
 # Initialize Trainer

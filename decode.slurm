@@ -3,8 +3,9 @@
 #SBATCH --account=share-ie-idi
 #SBATCH --time=05:00:00
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:1
-#SBATCH --ntasks-per-node=1
+#SBATCH --gres=gpu:A100m40:2
+#SBATCH --ntasks-per-node=4
+#SBATCH --mem=64000            # 64GB - CPU memory must be large enough for gpt2-xl.
 #SBATCH --job-name="news_decode"
 #SBATCH --output=news_decode.out
 

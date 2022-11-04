@@ -1,9 +1,11 @@
 import json
+import torch
 from typing import Optional
 from dataclasses import dataclass, field
 from numpy import array, argsort
 from datasets import Dataset
 from add_prompt import *
+
 
 @dataclass
 class DataArguments:
@@ -62,7 +64,7 @@ class train_data():
 
 		return data
 
-	def preprocess(self, dataset, tokenizer, max_length, doc_stride) -> Dataset:
+	def preprocess(self, dataset, tokenizer, max_length, doc_stride):
 
 		# Tokenize our examples with truncation and padding, but keep the overflows using a stride. This results
 		# in one example possible giving several features when a context is long, each of those features having a
@@ -83,15 +85,16 @@ class train_data():
 				stride=doc_stride,
 				padding="max_length",
 			)
+			
 
 			# The offset mappings will give us a map from token to character position in the original context. This will
 			# help us compute the start_positions and end_positions.
 			offset_mapping = tokenized_example.pop("offset_mapping")
-
+		
 			for i, offsets in enumerate(offset_mapping):
 				
-				sequence_ids = tokenized_example.sequence_ids(i)
-				
+				sequence_ids = tokenized_example.sequence_ids(i).copy()
+
 				# Add en eos token in the middle.
 				
 				eos_index = 0
@@ -101,7 +104,7 @@ class train_data():
 				end_index = len(sequence_ids) - 1
 				while sequence_ids[end_index] != 1:
 					end_index -= 1
-					
+				
 				input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:]
 				attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:]
 				sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
@@ -145,6 +148,7 @@ class train_data():
 						start_token, end_token = self.char_to_token(start_char,end_char,offsets)
 						tokenized_examples["start_labels"].append(start_token)
 						tokenized_examples["end_labels"].append(end_token)
+			del tokenized_example
 
 		return Dataset.from_dict(tokenized_examples)
 
@@ -334,7 +338,6 @@ class decode_data(train_data):
 				
 				sequence_ids = tokenized_example.sequence_ids(i)
 				
-				
 				eos_index = 0
 				while sequence_ids[eos_index] != 1:
 					eos_index += 1
@@ -355,7 +358,6 @@ class decode_data(train_data):
 				tokenized_examples["attention_mask"].append(attention_mask)
 				tokenized_examples["token_type_ids"].append([id if id is not None else 1 for id in sequence_ids])
 				tokenized_examples["offset_mappings"].append(offsets)
-
 		return Dataset.from_dict(tokenized_examples)
 
 
