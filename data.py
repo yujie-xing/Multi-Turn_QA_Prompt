@@ -227,7 +227,7 @@ class decode_data(train_data):
 			qa_dict['context'] = prompted_context
 
 
-		# Update the answer span in accordiance to the prompted context.
+		# Update the answer span in accordance to the prompted context.
 
 		prompt_positions_original = previous_qa_dict['prompt_positions_original']
 		prompt_positions = previous_qa_dict['prompt_positions']

@@ -242,7 +242,7 @@ class generate_QA():
 				predicted_span_original = decode_data_processor.calc_original_span_positions(qa_dict['prompt_positions_original'],predicted_span)
 				previous_qa_dict = qa_dict
 				
-				answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "answer": original_context[predicted_span_original[0]:predicted_span_original[1]]})
+				answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "question": qa_dict['question'], "gold": qa_dict['original_answer'], "answer": original_context[predicted_span_original[0]:predicted_span_original[1]]})
 
 #				self.write(qa_dict, predicted_span, predicted_score, predicted_span_original, original_context)
 
@@ -271,7 +271,7 @@ class generate_QA():
 			predicted_spans_original.append(predicted_span_original)
 				
 		for i, qa_dict in enumerate(test_dataset):
-			answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "answer": qa_dict['original_context'][predicted_spans_original[i][0]:predicted_spans_original[i][1]]})
+			answer_list.append({"id": qa_dict['id'], "turn_id" : qa_dict['turn_id'], "question" : qa_dict['question'], "gold" : qa_dict['original_answer'], "answer" : qa_dict['original_context'][predicted_spans_original[i][0]:predicted_spans_original[i][1]]})
 #			self.write(qa_dict, predicted_spans[i], predicted_scores[i], predicted_spans_original[i], qa_dict['original_context'])
 		
 		self.write_coqa_answer(answer_list)
