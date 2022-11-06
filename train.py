@@ -61,9 +61,9 @@ model = GPT2forQA(config).from_pretrained(dataargs.model_path)
 model.resize_token_embeddings(len(tokenizer))
 
 # Fix main weights in the model
-for param in model.transformer.parameters():
-	param.requires_grad = False
-model.transformer.wte.weight[tokenizer.pad_token_id]=0
+#for param in model.transformer.parameters():
+#	param.requires_grad = False
+#model.transformer.wte.weight[tokenizer.pad_token_id]=0
 
 print("model initialized")
 

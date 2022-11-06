@@ -11,3 +11,4 @@ requirements
 /prompt_QA_coqa/*
 /news/*
 /transformers/
+/prompt_QA_coqa_full/*
