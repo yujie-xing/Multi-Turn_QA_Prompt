@@ -431,11 +431,11 @@ class decode_data(train_data):
 
 						start_char = offset_mapping[start_index][0]
 						end_char = offset_mapping[end_index][1]
-						if qa_dict['context'][start_char] == " ":
-							start_char += 1
 
-						if start_char in prompt_chars or end_char in prompt_chars:
-							continue
+						while start_char in prompt_chars:
+							start_char += 1
+						while end_char in prompt_chars:
+							end_char -= 1
 
 						predicted_score = start_logit[start_index] + end_logit[end_index]
 
