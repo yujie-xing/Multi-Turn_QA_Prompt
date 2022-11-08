@@ -8,10 +8,6 @@ try:
 	dataargs, args = parser.parse_args_into_dataclasses()
 	if dataargs.batch_size != 0:
 		args.per_device_eval_batch_size = dataargs.batch_size
-	try:
-		mkdir(args.output_dir)
-	except:
-		pass
 	print(args)
 	print(dataargs)
 except:  ## Only for test
