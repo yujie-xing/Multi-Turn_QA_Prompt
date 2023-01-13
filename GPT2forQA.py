@@ -192,7 +192,7 @@ class GPT2forQA(GPT2ForTokenClassification):
 class QATrainer(Trainer):
 	def compute_loss(self, model, inputs, return_outputs=False):
 		# forward pass
-		outputs = model(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'], token_type_ids=inputs['token_type_ids'], start_labels=inputs['start_labels'], end_labels=inputs['end_labels'])
+		outputs = model(input_ids=inputs['input_ids_sharp_replaced'], attention_mask=inputs['attention_mask'], token_type_ids=inputs['token_type_ids'], start_labels=inputs['start_labels'], end_labels=inputs['end_labels'])
 		loss = outputs.get("loss")
 		# compute custom loss (suppose one has 3 labels with different weights)
 		return (loss, outputs) if return_outputs else loss
@@ -207,6 +207,8 @@ class generate_QA():
 
 		# Initialize tokenizer
 		self.tokenizer = AutoTokenizer.from_pretrained(dataargs.tokenizer_path)
+		self.sharp_id = self.tokenizer.vocab["<"]
+		self.space_sharp_id = self.tokenizer.vocab["Ġ<"]
 		# Initialize model
 		model = GPT2forQA.from_pretrained(dataargs.model_path)
 		self.predictor = QATrainer(model, self.args)
@@ -236,7 +238,7 @@ class generate_QA():
 
 			for i, qa_dict in enumerate(qa_list):
 				qa_dict = decode_data_processor.add_prompt_decode(qa_dict, predicted_span, previous_qa_dict)
-				tokenized_qa_dict = decode_data_processor.preprocess([qa_dict], self.tokenizer, self.dataargs.max_length, self.dataargs.doc_stride)
+				tokenized_qa_dict = decode_data_processor.preprocess([qa_dict], self.tokenizer, self.dataargs.max_length, self.dataargs.doc_stride, self.sharp_id, self.space_sharp_id)
 				start_logits,end_logits = self.predictor.predict(tokenized_qa_dict).predictions
 				predicted_span, predicted_score = decode_data_processor.postprocess([qa_dict], tokenized_qa_dict, start_logits, end_logits, self.dataargs.search_size, self.dataargs.max_answer_length)
 				predicted_span_original = decode_data_processor.calc_original_span_positions(qa_dict['prompt_positions_original'],predicted_span)
@@ -260,9 +262,8 @@ class generate_QA():
 		answer_list = list()
 
 		# Tokenize dataset & prepared labels
-		tokenized_test_dataset = eval_data_processor.preprocess(test_dataset, self.tokenizer, self.dataargs.max_length, self.dataargs.doc_stride)
-
-		start_logits, end_logits = self.predictor.predict(tokenized_test_dataset).predictions
+		tokenized_test_dataset = eval_data_processor.preprocess(test_dataset, self.tokenizer, self.dataargs.max_length, self.dataargs.doc_stride, self.sharp_id, self.space_sharp_id)
+		start_logits, end_logits = self.predictor.predict(tokenized_test_dataset_sharp_replaced).predictions
 		predicted_spans, predicted_scores = eval_data_processor.postprocess(test_dataset, tokenized_test_dataset, start_logits, end_logits, self.dataargs.search_size, self.dataargs.max_answer_length)
 
 		predicted_spans_original = list()

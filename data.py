@@ -64,14 +64,14 @@ class train_data():
 
 		return data
 
-	def preprocess(self, dataset, tokenizer, max_length, doc_stride):
+	def preprocess(self, dataset, tokenizer, max_length, doc_stride, sharp_id, space_sharp_id):
 
 		# Tokenize our examples with truncation and padding, but keep the overflows using a stride. This results
 		# in one example possible giving several features when a context is long, each of those features having a
 		# context that overlaps a bit the context of the previous feature.
 		
 		eos_id = tokenizer.eos_token_id
-		tokenized_examples = {"input_ids":list(),"attention_mask":list(),"token_type_ids":list(),"start_labels":list(),"end_labels":list()}
+		tokenized_examples = {"input_ids":list(),"input_ids_sharp_replaced":list(),"attention_mask":list(),"token_type_ids":list(),"start_labels":list(),"end_labels":list()}
 		
 		for example in dataset:
 			
@@ -112,6 +112,7 @@ class train_data():
 				
 				
 				tokenized_examples["input_ids"].append(input_ids)
+				tokenized_examples["input_ids_sharp_replaced"].append([space_sharp_id if x==sharp_id else x for x in input_ids])
 				tokenized_examples["attention_mask"].append(attention_mask)
 				tokenized_examples["token_type_ids"].append([id if id is not None else 1 for id in sequence_ids])
 				
@@ -148,7 +149,6 @@ class train_data():
 						start_token, end_token = self.char_to_token(start_char,end_char,offsets)
 						tokenized_examples["start_labels"].append(start_token)
 						tokenized_examples["end_labels"].append(end_token)
-			del tokenized_example
 
 		return Dataset.from_dict(tokenized_examples)
 
@@ -305,14 +305,14 @@ class decode_data(train_data):
 		return new_prompt_positions
 
 
-	def preprocess(self, dataset, tokenizer, max_length, doc_stride) -> Dataset:
+	def preprocess(self, dataset, tokenizer, max_length, doc_stride, sharp_id, space_sharp_id) -> Dataset:
 
 		# Tokenize our examples with truncation and padding, but keep the overflows using a stride. This results
 		# in one example possible giving several features when a context is long, each of those features having a
 		# context that overlaps a bit the context of the previous feature.
 		
 		eos_id = tokenizer.eos_token_id
-		tokenized_examples = {"input_ids":list(),"attention_mask":list(),"token_type_ids":list(),"ids":list(),"turn_ids":list(),"offset_mappings":list()}
+		tokenized_examples = {"input_ids":list(),"input_ids_sharp_replaced":list(),"attention_mask":list(),"token_type_ids":list(),"ids":list(),"turn_ids":list(),"offset_mappings":list()}
 		
 		for example in dataset:
 			
@@ -355,11 +355,12 @@ class decode_data(train_data):
 				
 				
 				tokenized_examples["input_ids"].append(input_ids)
+				tokenized_examples["input_ids_sharp_replaced"].append([space_sharp_id if x==sharp_id else x for x in input_ids])
 				tokenized_examples["attention_mask"].append(attention_mask)
 				tokenized_examples["token_type_ids"].append([id if id is not None else 1 for id in sequence_ids])
 				tokenized_examples["offset_mappings"].append(offsets)
-		return Dataset.from_dict(tokenized_examples)
 
+		return Dataset.from_dict(tokenized_examples)
 
 
 	def postprocess(self, dataset, tokenized_dataset, start_logits, end_logits, search_size = 20, max_answer_length = None):
@@ -472,18 +473,24 @@ class decode_data(train_data):
 
 def train_dev_test(coqa_path):
 	data_processor = train_data()
+	test_data_processor = decode_data()
 	train_dataset = data_processor.load(coqa_path)
 
 	# Initialize tokenizer
 	tokenizer = AutoTokenizer.from_pretrained('gpt2')
 	special_tokens_dict = {'pad_token': '<|paddingtokencustomized|>'}
 	tokenizer.add_special_tokens(special_tokens_dict)
+	sharp_id = tokenizer.vocab["<"]
+	space_sharp_id = tokenizer.vocab["Ġ<"]
 
 	# Tokenize dataset & prepared labels
-	tokenized_train_dataset = data_processor.preprocess(train_dataset[:1], tokenizer, 1020, 128)
+	tokenized_train_dataset = data_processor.preprocess(train_dataset[:1], tokenizer, 1020, 128, sharp_id, space_sharp_id)
+	tokenized_test_dataset = test_data_processor.preprocess(train_dataset[:1], tokenizer, 1020, 128, sharp_id, space_sharp_id)
 
 	num = 0
 	num1 = 0
+
+	print(tokenized_train_dataset["input_ids"][0]==tokenized_test_dataset["input_ids"][0])
 
 	print(train_dataset[num]['context'][train_dataset[num]['answer_span'][0]:train_dataset[num]['answer_span'][1]])
 
@@ -496,6 +503,10 @@ def train_dev_test(coqa_path):
 def decode_test(coqa_path):
 
 	data = decode_data()
+
+	tokenizer = AutoTokenizer.from_pretrained('gpt2')
+	special_tokens_dict = {'pad_token': '<|paddingtokencustomized|>'}
+	tokenizer.add_special_tokens(special_tokens_dict)
 
 	qa_dicts = data.data_to_dicts(coqa_path)
 
@@ -512,6 +523,9 @@ def decode_test(coqa_path):
 	for i, qa_dict in enumerate(qa_list):
 		print(qa_dict['turn_id'])
 		qa_dict = data.add_prompt_decode(qa_dict, predicted_span, previous_qa_dict)
+
+		tokenized_qa_dict = data.preprocess([qa_dict], tokenizer, 1020, 128, sharp_id, space_sharp_id)
+
 		span = qa_dict['answer_span']  # simulating predicted span
 		original_span = data.calc_original_span_positions(qa_dict['prompt_positions_original'],span)
 		prompt_positions = qa_dict['prompt_positions']
@@ -540,6 +554,6 @@ if __name__ == "__main__":
 	quac_train_path = 'dataset/quac-train.json'
 	quac_dev_path = 'dataset/quac-dev.json'
 
-	# train_dev_test(coqa_train_prompted_path)
+	train_dev_test(coqa_train_prompted_path)
 
-	decode_test(coqa_train_path)
+	# decode_test(coqa_train_path)

@@ -41,12 +41,14 @@ dev_dataset = data_processor.load(dataargs.dev_path)
 
 # Initialize tokenizer
 tokenizer = AutoTokenizer.from_pretrained(dataargs.tokenizer_path)
+sharp_id = tokenizer.vocab["<"]
+space_sharp_id = tokenizer.vocab["Ġ<"]
 special_tokens_dict = {'pad_token': '<|paddingtokencustomized|>'}
 tokenizer.add_special_tokens(special_tokens_dict)
 
 # Tokenize dataset & prepared labels
-tokenized_train_dataset = data_processor.preprocess(train_dataset, tokenizer, dataargs.max_length, dataargs.doc_stride)
-tokenized_dev_dataset = data_processor.preprocess(dev_dataset, tokenizer, dataargs.max_length, dataargs.doc_stride)
+tokenized_train_dataset = data_processor.preprocess(train_dataset, tokenizer, dataargs.max_length, dataargs.doc_stride, sharp_id, space_sharp_id)
+tokenized_dev_dataset = data_processor.preprocess(dev_dataset, tokenizer, dataargs.max_length, dataargs.doc_stride, sharp_id, space_sharp_id)
 
 print("data tokenized")
 

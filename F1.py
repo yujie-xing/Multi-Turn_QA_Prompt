@@ -27,9 +27,10 @@ for turn in answers:
 	scores.append(score)
 
 s = sum(scores)/len(scores)
-for i, ss in enumerate(scores):
-	if ss < 0.5:
-		print(answers[i])
+print(s)
+# for i, ss in enumerate(scores):
+# 	if ss < 0.5:
+# 		print(answers[i])
 
 
 
