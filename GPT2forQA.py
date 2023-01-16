@@ -192,7 +192,7 @@ class GPT2forQA(GPT2ForTokenClassification):
 class QATrainer(Trainer):
 	def compute_loss(self, model, inputs, return_outputs=False):
 		# forward pass
-		outputs = model(input_ids=inputs['input_ids_sharp_replaced'], attention_mask=inputs['attention_mask'], token_type_ids=inputs['token_type_ids'], start_labels=inputs['start_labels'], end_labels=inputs['end_labels'])
+		outputs = model(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'], token_type_ids=inputs['token_type_ids'], start_labels=inputs['start_labels'], end_labels=inputs['end_labels'])
 		loss = outputs.get("loss")
 		# compute custom loss (suppose one has 3 labels with different weights)
 		return (loss, outputs) if return_outputs else loss
