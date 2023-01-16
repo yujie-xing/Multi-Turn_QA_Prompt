@@ -71,7 +71,7 @@ class train_data():
 		# context that overlaps a bit the context of the previous feature.
 		
 		eos_id = tokenizer.eos_token_id
-		tokenized_examples = {"input_ids":list(),"input_ids_sharp_replaced":list(),"attention_mask":list(),"token_type_ids":list(),"start_labels":list(),"end_labels":list()}
+		tokenized_examples = {"original_input_ids":list(),"input_ids":list(),"attention_mask":list(),"token_type_ids":list(),"start_labels":list(),"end_labels":list()}
 		
 		for example in dataset:
 			
@@ -111,8 +111,8 @@ class train_data():
 				offsets = offsets[:eos_index] + [(-1,-1)] + offsets[eos_index:end_index + 1]
 				
 				
-				tokenized_examples["input_ids"].append(input_ids)
-				tokenized_examples["input_ids_sharp_replaced"].append([space_sharp_id if x==sharp_id else x for x in input_ids])
+				tokenized_examples["original_input_ids"].append(input_ids)
+				tokenized_examples["input_ids"].append([space_sharp_id if x==sharp_id else x for x in input_ids])
 				tokenized_examples["attention_mask"].append(attention_mask)
 				tokenized_examples["token_type_ids"].append([id if id is not None else 1 for id in sequence_ids])
 				
@@ -312,7 +312,7 @@ class decode_data(train_data):
 		# context that overlaps a bit the context of the previous feature.
 		
 		eos_id = tokenizer.eos_token_id
-		tokenized_examples = {"input_ids":list(),"input_ids_sharp_replaced":list(),"attention_mask":list(),"token_type_ids":list(),"ids":list(),"turn_ids":list(),"offset_mappings":list()}
+		tokenized_examples = {"original_input_ids":list(),"input_ids":list(),"attention_mask":list(),"token_type_ids":list(),"ids":list(),"turn_ids":list(),"offset_mappings":list()}
 		
 		for example in dataset:
 			
@@ -354,8 +354,8 @@ class decode_data(train_data):
 				offsets = [None]*eos_index + [(-1,-1)] + offsets[eos_index:end_index+1]
 				
 				
-				tokenized_examples["input_ids"].append(input_ids)
-				tokenized_examples["input_ids_sharp_replaced"].append([space_sharp_id if x==sharp_id else x for x in input_ids])
+				tokenized_examples["original_input_ids"].append(input_ids)
+				tokenized_examples["input_ids"].append([space_sharp_id if x==sharp_id else x for x in input_ids])
 				tokenized_examples["attention_mask"].append(attention_mask)
 				tokenized_examples["token_type_ids"].append([id if id is not None else 1 for id in sequence_ids])
 				tokenized_examples["offset_mappings"].append(offsets)
