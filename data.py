@@ -109,7 +109,7 @@ class train_data():
 				attention_mask = tokenized_example['attention_mask'][i]
 				# sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
 				# offsets = offsets[:eos_index] + [(-1,-1)] + offsets[eos_index:end_index + 1]
-				offsets = offsets[:end_index+1]
+				offsets = [None]*(start_index-1) + [(-1,-1)] + offsets[start_index:end_index+1]
 				
 				
 				tokenized_examples["original_input_ids"].append(input_ids)
@@ -517,8 +517,8 @@ def train_dev_test(coqa_path):
 	space_sharp_id = tokenizer.vocab["Ġ<"]
 
 	# Tokenize dataset & prepared labels
-	tokenized_train_dataset = data_processor.preprocess(train_dataset[:1], tokenizer, 1020, 128, sharp_id, space_sharp_id)
-	tokenized_test_dataset = test_data_processor.preprocess(train_dataset[:1], tokenizer, 1020, 128, sharp_id, space_sharp_id)
+	tokenized_train_dataset = data_processor.preprocess(train_dataset[:], tokenizer, 1020, 128, sharp_id, space_sharp_id)
+	tokenized_test_dataset = test_data_processor.preprocess(train_dataset[:], tokenizer, 1020, 128, sharp_id, space_sharp_id)
 
 	num = 0
 	num1 = 0
