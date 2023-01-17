@@ -70,7 +70,7 @@ class train_data():
 		# in one example possible giving several features when a context is long, each of those features having a
 		# context that overlaps a bit the context of the previous feature.
 		
-		eos_id = tokenizer.eos_token_id
+		# eos_id = tokenizer.eos_token_id
 		tokenized_examples = {"original_input_ids":list(),"input_ids":list(),"attention_mask":list(),"token_type_ids":list(),"start_labels":list(),"end_labels":list()}
 		
 		for example in dataset:
@@ -94,21 +94,22 @@ class train_data():
 			for i, offsets in enumerate(offset_mapping):
 				
 				sequence_ids = tokenized_example.sequence_ids(i).copy()
-
-				# Add en eos token in the middle.
 				
-				eos_index = 0
-				while sequence_ids[eos_index] != 1:
-					eos_index += 1
+				start_index = 0
+				while sequence_ids[start_index] != 1:
+					start_index += 1
 
 				end_index = len(sequence_ids) - 1
 				while sequence_ids[end_index] != 1:
 					end_index -= 1
 				
-				input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:]
-				attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:]
-				sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
-				offsets = offsets[:eos_index] + [(-1,-1)] + offsets[eos_index:end_index + 1]
+				# input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:]
+				input_ids = tokenized_example['input_ids'][i]
+				# attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:]
+				attention_mask = tokenized_example['attention_mask'][i]
+				# sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
+				# offsets = offsets[:eos_index] + [(-1,-1)] + offsets[eos_index:end_index + 1]
+				offsets = offsets[:end_index+1]
 				
 				
 				tokenized_examples["original_input_ids"].append(input_ids)
@@ -116,59 +117,48 @@ class train_data():
 				tokenized_examples["attention_mask"].append(attention_mask)
 				tokenized_examples["token_type_ids"].append([id if id is not None else 1 for id in sequence_ids])
 				
-				# We will label impossible answers with the index of the eos token.
-
-				assert eos_index == input_ids.index(eos_id)
+				# We will label impossible answers with the index of the last token of the question (start_index - 1).
 
 				answer_span = example["answer_span"]
 				# If no answers are given, set the cls_index as answer.
 				if answer_span[0] == -1:
 		#             raise Exception("The answer span does not exist.")
-					tokenized_examples["start_labels"].append(eos_index)
-					tokenized_examples["end_labels"].append(eos_index)
+					tokenized_examples["start_labels"].append(start_index-1)
+					tokenized_examples["end_labels"].append(start_index-1)
 				else:
 					# Start/end character index of the answer in the text.
 					start_char = answer_span[0]
 					end_char = answer_span[1]
 
-					# Start and end token index of the current span in the text.
-					token_start_index = eos_index + 1
-					token_end_index = end_index + 1
-
-					assert token_start_index == offsets.index((-1, -1)) + 1
-					assert token_end_index == len(offsets) - 1
-
-					# Detect if the answer is out of the span (in which case this feature is labeled with the eos index).
-					if not (offsets[token_start_index][0] <= start_char and offsets[token_end_index][1] >= end_char):
+					# Detect if the answer is out of the span (in which case this feature is labeled with the last token of the question (start_index - 1)).
+					if not (offsets[start_index][0] <= start_char and offsets[end_index][1] >= end_char):
 		#                 raise Exception("The answer span does not fall in the context.")
-						tokenized_examples["start_labels"].append(eos_index)
-						tokenized_examples["end_labels"].append(eos_index)
+						tokenized_examples["start_labels"].append(start_index-1)
+						tokenized_examples["end_labels"].append(start_index-1)
 					else:
-						# Otherwise move the token_start_index and token_end_index to the two ends of the answer.
+						# Otherwise move the start_index and end_index to the two ends of the answer.
 						# Note: we could go after the last offset if the answer is the last word (edge case).
-						start_token, end_token = self.char_to_token(start_char,end_char,offsets)
+						start_token, end_token = self.char_to_token(start_char,end_char,offsets,start_index,end_index)
 						tokenized_examples["start_labels"].append(start_token)
 						tokenized_examples["end_labels"].append(end_token)
 
 		return Dataset.from_dict(tokenized_examples)
 
 
-	def char_to_token(self, start_char, end_char, offsets):
-		token_start_index = offsets.index((-1, -1)) + 1
-		token_end_index = len(offsets) - 1
+	def char_to_token(self, start_char, end_char, offsets, start_index, end_index):
 
+		while start_index < len(offsets) and offsets[start_index][0] <= start_char:
+			start_index += 1
 
-		while token_start_index < len(offsets) and offsets[token_start_index][0] <= start_char:
-			token_start_index += 1
-		while offsets[token_end_index][1] >= end_char:
-			token_end_index -= 1
+		while offsets[end_index][1] >= end_char:
+			end_index -= 1
 
-		return token_start_index - 1, token_end_index + 1
+		return start_index - 1, end_index + 1
 
 
 class decode_data(train_data):
 
-	def data_to_dicts(self, path):
+	def data_to_dicts_coqa(self, path):
 
 		qa_dicts = list()
 
@@ -208,6 +198,46 @@ class decode_data(train_data):
 			qa_dicts.append(qa_list)
 
 		return qa_dicts
+
+
+
+	def data_to_dicts_quac(self, path):
+
+		qa_dicts = list()
+
+		# turn data to a dict that contain necessary informations. Need to write your own.
+		# taking coqa as an example.
+
+		with open(path) as file:
+			data = json.load(file)
+			data = data["data"]
+			
+		for article in data:
+			for paragraph in article['paragraphs']:
+
+				qa_list = list()
+
+				id = paragraph['id']
+				context = paragraph['context']
+				qas = paragraph['qas']
+
+				for turn_id in range(len(qas)):
+					question = qas[turn_id]['question']
+					answer = qas[turn_id]['orig_answer']['text']
+					if answer == 'CANNOTANSWER':
+						answer_start = -1
+						answer_end = -1
+					else:
+						answer_start = int(qas[turn_id]['orig_answer']['answer_start'])
+						answer_end = answer_start + len(answer)  # context[start : end] = answer.
+					human_answer = answer
+
+					qa_dict = {'id': id, 'context': context, 'turn_id': turn_id+1, 'question': question, 'answer' : answer, 'answer_span': (answer_start,answer_end), 'human_answer': human_answer}
+					qa_list.append(qa_dict)
+				qa_dicts.append(qa_list)
+
+		return qa_dicts
+
 
 
 	def add_prompt_decode(self, qa_dict, predicted_span, previous_qa_dict):
@@ -311,7 +341,7 @@ class decode_data(train_data):
 		# in one example possible giving several features when a context is long, each of those features having a
 		# context that overlaps a bit the context of the previous feature.
 		
-		eos_id = tokenizer.eos_token_id
+		# eos_id = tokenizer.eos_token_id
 		tokenized_examples = {"original_input_ids":list(),"input_ids":list(),"attention_mask":list(),"token_type_ids":list(),"ids":list(),"turn_ids":list(),"offset_mappings":list()}
 		
 		for example in dataset:
@@ -338,20 +368,21 @@ class decode_data(train_data):
 				
 				sequence_ids = tokenized_example.sequence_ids(i)
 				
-				eos_index = 0
-				while sequence_ids[eos_index] != 1:
-					eos_index += 1
+				start_index = 0
+				while sequence_ids[start_index] != 1:
+					start_index += 1
 
 				end_index = len(sequence_ids) - 1
 				while sequence_ids[end_index] != 1:
 					end_index -= 1
-
-				# Add en eos token in the middle.
 					
-				input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:]
-				attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:]
-				sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
-				offsets = [None]*eos_index + [(-1,-1)] + offsets[eos_index:end_index+1]
+				# input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:]
+				input_ids = tokenized_example['input_ids'][i]
+				# attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:]
+				attention_mask = tokenized_example['attention_mask'][i]
+				# sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
+				# offsets = [None]*eos_index + [(-1,-1)] + offsets[eos_index:end_index+1]
+				offsets = [None]*(start_index-1) + [(-1,-1)] + offsets[start_index:end_index+1]
 				
 				
 				tokenized_examples["original_input_ids"].append(input_ids)
@@ -404,8 +435,9 @@ class decode_data(train_data):
 				offset_mapping = tokenized_dataset[tokenized_index]["offset_mappings"]
 
 				# Update minimum null prediction.
-				eos_index = offset_mapping.index([-1,-1])
-				null_score = start_logit[eos_index] + end_logit[eos_index]
+				# eos_index = offset_mapping.index([-1,-1])
+				null_index = offset_mapping.index([-1,-1])
+				null_score = start_logit[null_index] + end_logit[null_index]
 
 				best_score = null_score
 				best_answer = (-1,-1)
@@ -478,8 +510,9 @@ def train_dev_test(coqa_path):
 
 	# Initialize tokenizer
 	tokenizer = AutoTokenizer.from_pretrained('gpt2')
-	special_tokens_dict = {'pad_token': '<|paddingtokencustomized|>'}
-	tokenizer.add_special_tokens(special_tokens_dict)
+	tokenizer.pad_token = tokenizer.eos_token
+	# special_tokens_dict = {'pad_token': '<|paddingtokencustomized|>'}
+	# tokenizer.add_special_tokens(special_tokens_dict)
 	sharp_id = tokenizer.vocab["<"]
 	space_sharp_id = tokenizer.vocab["Ġ<"]
 
@@ -505,10 +538,11 @@ def decode_test(coqa_path):
 	data = decode_data()
 
 	tokenizer = AutoTokenizer.from_pretrained('gpt2')
-	special_tokens_dict = {'pad_token': '<|paddingtokencustomized|>'}
-	tokenizer.add_special_tokens(special_tokens_dict)
+	tokenizer.pad_token = tokenizer.eos_token
+	# special_tokens_dict = {'pad_token': '<|paddingtokencustomized|>'}
+	# tokenizer.add_special_tokens(special_tokens_dict)
 
-	qa_dicts = data.data_to_dicts(coqa_path)
+	qa_dicts = data.data_to_dicts_coqa(coqa_path)
 
 	qa_list = qa_dicts[2409]
 	print(len(qa_list))
@@ -553,7 +587,8 @@ if __name__ == "__main__":
 	coqa_dev_path = 'dataset/coqa-dev.json'
 	quac_train_path = 'dataset/quac-train.json'
 	quac_dev_path = 'dataset/quac-dev.json'
+	quac_train_prompted_path = 'dataset/quac-train-prompted.json'
 
-	train_dev_test(coqa_train_prompted_path)
+	train_dev_test(quac_train_prompted_path)
 
 	# decode_test(coqa_train_path)

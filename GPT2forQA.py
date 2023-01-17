@@ -225,7 +225,10 @@ class generate_QA():
 
 		decode_data_processor = decode_data()
 
-		qa_dicts = decode_data_processor.data_to_dicts(self.dataargs.test_path)
+		if "coqa" in self.dataargs.test_path:
+			qa_dicts = decode_data_processor.data_to_dicts_coqa(self.dataargs.test_path)
+		elif "quac" in self.dataargs.test_path:
+			qa_dicts = decode_data_processor.data_to_dicts_quac(self.dataargs.test_path)
 		
 		answer_list = list()
 

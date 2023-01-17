@@ -5,9 +5,12 @@ class qa_add_prompt():
 
 	def __init__(self, path):
 
-		self.prompted_dicts = self.add_prompt(self.data_to_dicts(path))
+		if "coqa" in path:
+			self.prompted_dicts = self.add_prompt(self.data_to_dicts_coqa(path))
+		elif "quac" in path:
+			self.prompted_dicts = self.add_prompt(self.data_to_dicts_quac(path))
 
-	def data_to_dicts(self, path):
+	def data_to_dicts_coqa(self, path):
 
 		qa_dicts = list()
 
@@ -31,7 +34,6 @@ class qa_add_prompt():
 				question = questions[num]['input_text']
 				answer = answers[num]['span_text']
 				answer_start = answers[num]['span_start']
-				answer_end = answers[num]['span_end']
 				answer_end = answers[num]['span_end'] # context[start : end] = answer.
 				human_answer = answers[num]['input_text']
 
@@ -45,6 +47,43 @@ class qa_add_prompt():
 				qa_dict = {'id': id, 'context': context, 'turn_id': turn_id, 'question': question, 'answer' : answer, 'answer_span': (answer_start,answer_end), 'human_answer': human_answer}
 				qa_list.append(qa_dict)
 			qa_dicts.append(qa_list)
+
+		return qa_dicts
+
+	def data_to_dicts_quac(self, path):
+
+		qa_dicts = list()
+
+		# turn data to a dict that contain necessary informations. Need to write your own.
+		# taking coqa as an example.
+
+		with open(path) as file:
+			data = json.load(file)
+			data = data["data"]
+			
+		for article in data:
+			for paragraph in article['paragraphs']:
+
+				qa_list = list()
+
+				id = paragraph['id']
+				context = paragraph['context']
+				qas = paragraph['qas']
+
+				for turn_id in range(len(qas)):
+					question = qas[turn_id]['question']
+					answer = qas[turn_id]['orig_answer']['text']
+					if answer == 'CANNOTANSWER':
+						answer_start = -1
+						answer_end = -1
+					else:
+						answer_start = int(qas[turn_id]['orig_answer']['answer_start'])
+						answer_end = answer_start + len(answer)  # context[start : end] = answer.
+					human_answer = answer
+
+					qa_dict = {'id': id, 'context': context, 'turn_id': turn_id+1, 'question': question, 'answer' : answer, 'answer_span': (answer_start,answer_end), 'human_answer': human_answer}
+					qa_list.append(qa_dict)
+				qa_dicts.append(qa_list)
 
 		return qa_dicts
 
@@ -151,7 +190,7 @@ class qa_add_prompt():
 
 
 if __name__ == "__main__":
-	path = "dataset/coqa-dev.json"
+	path = "dataset/quac-dev.json"
 	prompts = qa_add_prompt(path)
 	prompted_data = prompts.prompted_data()
 	
