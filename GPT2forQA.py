@@ -200,7 +200,7 @@ class QATrainer(Trainer):
 class QALongformerTrainer(Trainer):
 	def compute_loss(self, model, inputs, return_outputs=False):
 		# forward pass
-		outputs = model(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'], start_positions=inputs['start_labels'], end_positions=inputs['end_labels'])
+		outputs = model(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'], start_positions=inputs['start_positions'], end_positions=inputs['end_positions'])
 		loss = outputs.get("loss")
 		# compute custom loss (suppose one has 3 labels with different weights)
 		return (loss, outputs) if return_outputs else loss
