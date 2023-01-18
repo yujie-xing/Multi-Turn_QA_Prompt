@@ -515,7 +515,7 @@ class train_data_longformer(train_data):
 				example["context"],
 				truncation='only_second',
 				return_offsets_mapping=True,
-				padding="longest",
+				padding="max_length",
 			)
 			
 
@@ -590,7 +590,7 @@ class decode_data_longformer(decode_data):
 				example["context"],
 				truncation='only_second',
 				return_offsets_mapping=True,
-				padding="longest",
+				padding="max_length",
 			)
 
 			# The offset mappings will give us a map from token to character position in the original context. This will
