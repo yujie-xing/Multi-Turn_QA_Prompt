@@ -7,7 +7,7 @@ from torch.nn import CrossEntropyLoss
 from transformers import GPT2ForTokenClassification
 from transformers.utils import add_start_docstrings_to_model_forward, add_code_sample_docstrings
 from transformers.modeling_outputs import TokenClassifierOutput
-from transformers import AutoTokenizer, GPT2Model
+from transformers import AutoTokenizer, GPT2Model, AutoModelForQuestionAnswering
 from transformers import Trainer
 from data import decode_data
 
@@ -197,6 +197,14 @@ class QATrainer(Trainer):
 		# compute custom loss (suppose one has 3 labels with different weights)
 		return (loss, outputs) if return_outputs else loss
 
+class QALongformerTrainer(Trainer):
+	def compute_loss(self, model, inputs, return_outputs=False):
+		# forward pass
+		outputs = model(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'], start_positions=inputs['start_labels'], end_positions=inputs['end_labels'])
+		loss = outputs.get("loss")
+		# compute custom loss (suppose one has 3 labels with different weights)
+		return (loss, outputs) if return_outputs else loss
+
 
 class generate_QA():
 
@@ -254,11 +262,65 @@ class generate_QA():
 		self.write_coqa_answer(answer_list)
 
 
+class generate_QA_longformer():
+
+	def __init__(self, args, dataargs):
+
+		self.args = args
+		self.dataargs = dataargs
+
+		# Initialize tokenizer
+		self.tokenizer = AutoTokenizer.from_pretrained(dataargs.tokenizer_path)
+		# Initialize model
+		model = AutoModelForQuestionAnswering.from_pretrained(dataargs.model_path)
+		self.predictor = QALongformerTrainer(model, self.args)
+		self.output_path = path.join(self.args.output_dir,self.dataargs.output_file)
+
+		with open(self.output_path, 'w') as output:
+			output.write("")
+			
+		print("Output to {}.\n".format(self.output_path))
+
+		
+
+	def decode(self):
+
+		decode_data_processor = decode_data_longformer()
+
+		if "coqa" in self.dataargs.test_path:
+			qa_dicts = decode_data_processor.data_to_dicts_coqa(self.dataargs.test_path)
+		elif "quac" in self.dataargs.test_path:
+			qa_dicts = decode_data_processor.data_to_dicts_quac(self.dataargs.test_path)
+		
+		answer_list = list()
+
+		for qa_list in qa_dicts:
+
+			predicted_span = None
+			previous_qa_dict = None
+
+			original_context = qa_list[0]['context']
+
+			for i, qa_dict in enumerate(qa_list):
+				qa_dict = decode_data_processor.add_prompt_decode(qa_dict, predicted_span, previous_qa_dict)
+				tokenized_qa_dict = decode_data_processor.preprocess([qa_dict], self.tokenizer, self.dataargs.max_length, self.dataargs.doc_stride, self.sharp_id, self.space_sharp_id)
+				start_logits,end_logits = self.predictor.predict(tokenized_qa_dict).predictions
+				predicted_span, predicted_score = decode_data_processor.postprocess([qa_dict], tokenized_qa_dict, start_logits, end_logits, self.dataargs.search_size, self.dataargs.max_answer_length)
+				predicted_span_original = decode_data_processor.calc_original_span_positions(qa_dict['prompt_positions_original'],predicted_span)
+				previous_qa_dict = qa_dict
+				
+				answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "question": qa_dict['question'], "gold": qa_dict['original_answer'], "answer": original_context[predicted_span_original[0]:predicted_span_original[1]]})
+
+#				self.write(qa_dict, predicted_span, predicted_score, predicted_span_original, original_context)
+
+		self.write_coqa_answer(answer_list)
+
+
 
 
 	def evaluate(self):   ## For evaluation of prompted test dataset.
 
-		eval_data_processor = decode_data()
+		eval_data_processor = decode_data_longformer()
 
 		test_dataset = eval_data_processor.load(self.dataargs.test_path)
 		
