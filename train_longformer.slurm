@@ -4,10 +4,10 @@
 #SBATCH --time=40:00:00
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:A100m80:1
-#SBATCH --ntasks-per-node=4
+#SBATCH --ntasks-per-node=2
 #SBATCH --mem=64000
-#SBATCH --job-name="news_train"
-#SBATCH --output=news_train.out
+#SBATCH --job-name="news_train_longformer"
+#SBATCH --output=news_train_longformer.out
 
 module purge
 module load Python/3.9.6-GCCcore-11.2.0

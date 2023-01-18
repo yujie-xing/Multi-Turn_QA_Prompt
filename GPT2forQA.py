@@ -9,7 +9,7 @@ from transformers.utils import add_start_docstrings_to_model_forward, add_code_s
 from transformers.modeling_outputs import TokenClassifierOutput
 from transformers import AutoTokenizer, GPT2Model, AutoModelForQuestionAnswering
 from transformers import Trainer
-from data import decode_data
+from data import decode_data, decode_data_longformer
 
 
 

@@ -5,7 +5,7 @@ import torch
 import transformers
 from transformers import HfArgumentParser, TrainingArguments
 from transformers import AutoTokenizer, AutoModelForQuestionAnswering, AutoConfig
-from data import DataArguments, train_data
+from data import DataArguments, train_data_longformer
 from GPT2forQA import QALongformerTrainer
 
 #===============================

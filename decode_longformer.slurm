@@ -5,9 +5,9 @@
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
 #SBATCH --ntasks-per-node=2
-#SBATCH --mem=64000            # 64GB - CPU memory must be large enough for gpt2-xl.
-#SBATCH --job-name="news_decode"
-#SBATCH --output=news_decode.out
+#SBATCH --mem=64000
+#SBATCH --job-name="news_decode_longformer"
+#SBATCH --output=news_decode_longformer.out
 
 module load Python/3.9.6-GCCcore-11.2.0
 module load CUDA/11.3.1
