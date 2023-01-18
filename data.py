@@ -521,56 +521,54 @@ class train_data_longformer(train_data):
 
 			# The offset mappings will give us a map from token to character position in the original context. This will
 			# help us compute the start_positions and end_positions.
-			offset_mapping = tokenized_example.pop("offset_mapping")
+			offsets = tokenized_example.pop("offset_mapping")
+				
+			sequence_ids = tokenized_example.sequence_ids().copy()
+				
+			start_index = 0
+			while sequence_ids[start_index] != 1:
+				start_index += 1
+
+			end_index = len(sequence_ids) - 1
+			while sequence_ids[end_index] != 1:
+				end_index -= 1
+				
+			# input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:]
+			input_ids = tokenized_example['input_ids']
+			# attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:]
+			attention_mask = tokenized_example['attention_mask']
+			# sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
+			# offsets = offsets[:eos_index] + [(-1,-1)] + offsets[eos_index:end_index + 1]
+			offsets = [None]*(start_index-1) + [(-1,-1)] + offsets[start_index:end_index+1]
+			
+				
+			tokenized_examples["input_ids"].append(input_ids)
+			tokenized_examples["attention_mask"].append(attention_mask)
 		
-			for i, offsets in enumerate(offset_mapping):
-				
-				sequence_ids = tokenized_example.sequence_ids(i).copy()
-				
-				start_index = 0
-				while sequence_ids[start_index] != 1:
-					start_index += 1
+			# We will label impossible answers with the index of the last token of the question (start_index - 1).
 
-				end_index = len(sequence_ids) - 1
-				while sequence_ids[end_index] != 1:
-					end_index -= 1
-				
-				# input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:]
-				input_ids = tokenized_example['input_ids'][i]
-				# attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:]
-				attention_mask = tokenized_example['attention_mask'][i]
-				# sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
-				# offsets = offsets[:eos_index] + [(-1,-1)] + offsets[eos_index:end_index + 1]
-				offsets = [None]*(start_index-1) + [(-1,-1)] + offsets[start_index:end_index+1]
-				
-				
-				tokenized_examples["input_ids"].append(input_ids)
-				tokenized_examples["attention_mask"].append(attention_mask)
-				
-				# We will label impossible answers with the index of the last token of the question (start_index - 1).
+			answer_span = example["answer_span"]
+			# If no answers are given, set the cls_index as answer.
+			if answer_span[0] == -1:
+	#             raise Exception("The answer span does not exist.")
+				tokenized_examples["start_positions"].append(start_index-1)
+				tokenized_examples["end_positions"].append(start_index-1)
+			else:
+				# Start/end character index of the answer in the text.
+				start_char = answer_span[0]
+				end_char = answer_span[1]
 
-				answer_span = example["answer_span"]
-				# If no answers are given, set the cls_index as answer.
-				if answer_span[0] == -1:
-		#             raise Exception("The answer span does not exist.")
+				# Detect if the answer is out of the span (in which case this feature is labeled with the last token of the question (start_index - 1)).
+				if not (offsets[start_index][0] <= start_char and offsets[end_index][1] >= end_char):
+	#                 raise Exception("The answer span does not fall in the context.")
 					tokenized_examples["start_positions"].append(start_index-1)
 					tokenized_examples["end_positions"].append(start_index-1)
 				else:
-					# Start/end character index of the answer in the text.
-					start_char = answer_span[0]
-					end_char = answer_span[1]
-
-					# Detect if the answer is out of the span (in which case this feature is labeled with the last token of the question (start_index - 1)).
-					if not (offsets[start_index][0] <= start_char and offsets[end_index][1] >= end_char):
-		#                 raise Exception("The answer span does not fall in the context.")
-						tokenized_examples["start_positions"].append(start_index-1)
-						tokenized_examples["end_positions"].append(start_index-1)
-					else:
-						# Otherwise move the start_index and end_index to the two ends of the answer.
-						# Note: we could go after the last offset if the answer is the last word (edge case).
-						start_token, end_token = self.char_to_token(start_char,end_char,offsets,start_index,end_index)
-						tokenized_examples["start_positions"].append(start_token)
-						tokenized_examples["end_positions"].append(end_token)
+					# Otherwise move the start_index and end_index to the two ends of the answer.
+					# Note: we could go after the last offset if the answer is the last word (edge case).
+					start_token, end_token = self.char_to_token(start_char,end_char,offsets,start_index,end_index)
+					tokenized_examples["start_positions"].append(start_token)
+					tokenized_examples["end_positions"].append(end_token)
 
 		return Dataset.from_dict(tokenized_examples)
 
@@ -597,64 +595,64 @@ class decode_data_longformer(decode_data):
 
 			# The offset mappings will give us a map from token to character position in the original context. This will
 			# help us compute the start_positions and end_positions.
-			offset_mapping = tokenized_example.pop("offset_mapping")
+			offsets = tokenized_example.pop("offset_mapping")
 
-			for i, offsets in enumerate(offset_mapping):
-
-				tokenized_examples["ids"].append(example["id"])
-				tokenized_examples["turn_ids"].append(example["turn_id"])
+			tokenized_examples["ids"].append(example["id"])
+			tokenized_examples["turn_ids"].append(example["turn_id"])
 				
-				sequence_ids = tokenized_example.sequence_ids(i)
+			sequence_ids = tokenized_example.sequence_ids()
 				
-				start_index = 0
-				while sequence_ids[start_index] != 1:
-					start_index += 1
+			start_index = 0
+			while sequence_ids[start_index] != 1:
+				start_index += 1
 
-				end_index = len(sequence_ids) - 1
-				while sequence_ids[end_index] != 1:
-					end_index -= 1
+			end_index = len(sequence_ids) - 1
+			while sequence_ids[end_index] != 1:
+				end_index -= 1
 					
-				# input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:]
-				input_ids = tokenized_example['input_ids'][i]
-				# attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:]
-				attention_mask = tokenized_example['attention_mask'][i]
-				# sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
-				# offsets = [None]*eos_index + [(-1,-1)] + offsets[eos_index:end_index+1]
-				offsets = [None]*(start_index-1) + [(-1,-1)] + offsets[start_index:end_index+1]
-				
-				tokenized_examples["input_ids"].append(input_ids)
-				tokenized_examples["attention_mask"].append(attention_mask)
-				tokenized_examples["offset_mappings"].append(offsets)
+			# input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:]
+			input_ids = tokenized_example['input_ids']
+			# attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:]
+			attention_mask = tokenized_example['attention_mask']
+			# sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
+			# offsets = [None]*eos_index + [(-1,-1)] + offsets[eos_index:end_index+1]
+			offsets = [None]*(start_index-1) + [(-1,-1)] + offsets[start_index:end_index+1]
+			
+			tokenized_examples["input_ids"].append(input_ids)
+			tokenized_examples["attention_mask"].append(attention_mask)
+			tokenized_examples["offset_mappings"].append(offsets)
 
 		return Dataset.from_dict(tokenized_examples)
 
 
 def train_dev_test(coqa_path):
-	data_processor = train_data()
-	test_data_processor = decode_data()
+	data_processor = train_data_longformer()
+	# test_data_processor = decode_data()
 	train_dataset = data_processor.load(coqa_path)
 
 	# Initialize tokenizer
-	tokenizer = AutoTokenizer.from_pretrained('gpt2')
-	tokenizer.pad_token = tokenizer.eos_token
+	# tokenizer = AutoTokenizer.from_pretrained('gpt2')
+	# tokenizer.pad_token = tokenizer.eos_token
 	# special_tokens_dict = {'pad_token': '<|paddingtokencustomized|>'}
 	# tokenizer.add_special_tokens(special_tokens_dict)
-	sharp_id = tokenizer.vocab["<"]
-	space_sharp_id = tokenizer.vocab["Ġ<"]
+	tokenizer = AutoTokenizer.from_pretrained("mrm8488/longformer-base-4096-finetuned-squadv2")
+	# sharp_id = tokenizer.vocab["<"]
+	# space_sharp_id = tokenizer.vocab["Ġ<"]
 
 	# Tokenize dataset & prepared labels
-	tokenized_train_dataset = data_processor.preprocess(train_dataset[:], tokenizer, 1020, 128, sharp_id, space_sharp_id)
-	tokenized_test_dataset = test_data_processor.preprocess(train_dataset[:], tokenizer, 1020, 128, sharp_id, space_sharp_id)
+	# tokenized_train_dataset = data_processor.preprocess(train_dataset[:], tokenizer, 1020, 128, sharp_id, space_sharp_id)
+	tokenized_train_dataset = data_processor.preprocess(train_dataset, tokenizer)
+	# tokenized_test_dataset = test_data_processor.preprocess(train_dataset[:], tokenizer, 1020, 128, sharp_id, space_sharp_id)
 
 	num = 0
 	num1 = 0
 
-	print(tokenized_train_dataset["input_ids"][0]==tokenized_test_dataset["input_ids"][0])
+	# print(tokenized_train_dataset["input_ids"][0]==tokenized_test_dataset["input_ids"][0])
 
-	print(train_dataset[num]['context'][train_dataset[num]['answer_span'][0]:train_dataset[num]['answer_span'][1]])
+	# print(train_dataset[num]['context'][train_dataset[num]['answer_span'][0]:train_dataset[num]['answer_span'][1]])
 
-	print(len(tokenized_train_dataset['input_ids']))
-	print(tokenizer.decode(tokenized_train_dataset[num1]['input_ids'][tokenized_train_dataset[num1]['start_labels']:tokenized_train_dataset[num1]['end_labels']+1]))
+	# print(len(tokenized_train_dataset['input_ids']))
+	# print(tokenizer.decode(tokenized_train_dataset[num1]['input_ids'][tokenized_train_dataset[num1]['start_labels']:tokenized_train_dataset[num1]['end_labels']+1]))
 
 
 
