@@ -511,9 +511,10 @@ class train_data_longformer(train_data):
 		tokenized = tokenizer(
 			[example['question'] for example in dataset],
 			[example["context"] for example in dataset],
+			max_length=2560,
 			truncation='only_second',
 			return_offsets_mapping=True,
-			padding="longest",
+			padding="max_length",
 		)
 
 
@@ -579,9 +580,10 @@ class decode_data_longformer(decode_data):
 		tokenized = tokenizer(
 			[example['question'] for example in dataset],
 			[example['context'] for example in dataset],
+			max_length=2560,
 			truncation='only_second',
 			return_offsets_mapping=True,
-			padding="longest",
+			padding="max_length",
 		)
 
 		tokenized_examples["input_ids"] = tokenized["input_ids"]
@@ -703,6 +705,6 @@ if __name__ == "__main__":
 	quac_dev_path = 'dataset/quac-dev.json'
 	quac_train_prompted_path = 'dataset/quac-train-prompted.json'
 
-	# train_dev_test(quac_train_prompted_path)
+	train_dev_test(quac_train_prompted_path)
 
-	decode_test(quac_train_path)
+	# decode_test(quac_train_path)
