@@ -256,12 +256,13 @@ class generate_QA():
 				predicted_span_original = self.data_processor.calc_original_span_positions(qa_dict['prompt_positions_original'],predicted_span)
 				previous_qa_dict = qa_dict
 				
-				answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "question": qa_dict['question'], "gold": qa_dict['original_answer'], "answer": original_context[predicted_span_original[0]:predicted_span_original[1]]})
+				answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "question": qa_dict['question'], "gold": qa_dict['original_answer'], "span": (predicted_span_original[0],predicted_span_original[1]), "answer": original_context[predicted_span_original[0]:predicted_span_original[1]]})
 
 #				self.write(qa_dict, predicted_span, predicted_score, predicted_span_original, original_context)
 
 		# self.write_coqa_answer(answer_list)
 		self.write_quac_answer(answer_list)
+		print("Decoding finished!")
 
 
 	def evaluate(self):   ## For evaluation of prompted test dataset.
@@ -281,11 +282,13 @@ class generate_QA():
 			predicted_spans_original.append(predicted_span_original)
 				
 		for i, qa_dict in enumerate(test_dataset):
-			answer_list.append({"id": qa_dict['id'], "turn_id" : qa_dict['turn_id'], "question" : qa_dict['question'], "gold" : qa_dict['original_answer'], "answer" : qa_dict['original_context'][predicted_spans_original[i][0]:predicted_spans_original[i][1]]})
+			answer_list.append({"id": qa_dict['id'], "turn_id" : qa_dict['turn_id'], "question" : qa_dict['question'], "gold" : qa_dict['original_answer'], "span" : (predicted_spans_original[i][0],predicted_spans_original[i][1]), "answer" : qa_dict['original_context'][predicted_spans_original[i][0]:predicted_spans_original[i][1]]})
 #			self.write(qa_dict, predicted_spans[i], predicted_scores[i], predicted_spans_original[i], qa_dict['original_context'])
 		
 		# self.write_coqa_answer(answer_list)
 		self.write_quac_answer(answer_list)
+
+		print("Decoding finished!")
 			
 			
 			
@@ -296,7 +299,7 @@ class generate_QA():
 
 	def write_quac_answer(self, answer_list):
 
-		quac_answer_list = {"best_span_str":[], "qid":[], "gold":[]}
+		quac_answer_list = {"best_span_str":[], "qid":[], "gold":[], "span":[]}
 
 		for i in range(len(answer_list)):
 			id = answer_list[i]["id"]
@@ -304,10 +307,16 @@ class generate_QA():
 			qid = id + "_q#" + str(turn_id-1)
 			gold = answer_list[i]["gold"]
 			answer = answer_list[i]["answer"]
+			span = answer_list[i]["span"]
 
-			quac_answer_list["best_span_str"].append(answer)
+			if span[0] == -1 and span[1] == -1:
+				quac_answer_list["best_span_str"].append("CANNOTANSWER")
+
+			else:
+				quac_answer_list["best_span_str"].append(answer)
 			quac_answer_list["gold"].append(gold)
 			quac_answer_list["qid"].append(qid)
+			quac_answer_list["span"].append(span)
 
 		quac_answer_list["yesno"] = ["x"] * len(quac_answer_list["qid"])
 		quac_answer_list["followup"] = ["y"] * len(quac_answer_list["qid"])
