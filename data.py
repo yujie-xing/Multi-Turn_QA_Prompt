@@ -574,7 +574,7 @@ class train_data_longformer(train_data):
 
 class decode_data_longformer(decode_data):
 
-	def preprocess(self, dataset, tokenizer) -> Dataset:
+	def preprocess(self, dataset, tokenizer, input1=1, input2=2, input3=3, input4=4) -> Dataset:
 
 		# Tokenize our examples with truncation and padding, but keep the overflows using a stride. This results
 		# in one example possible giving several features when a context is long, each of those features having a

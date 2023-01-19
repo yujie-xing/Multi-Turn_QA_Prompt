@@ -272,7 +272,7 @@ class generate_QA():
 
 		# Tokenize dataset & prepared labels
 		tokenized_test_dataset = self.data_processor.preprocess(test_dataset, self.tokenizer, self.dataargs.max_length, self.dataargs.doc_stride, self.sharp_id, self.space_sharp_id)
-		start_logits, end_logits = self.predictor.predict(tokenized_test_dataset_sharp_replaced).predictions
+		start_logits, end_logits = self.predictor.predict(tokenized_test_dataset).predictions
 		predicted_spans, predicted_scores = self.data_processor.postprocess(test_dataset, tokenized_test_dataset, start_logits, end_logits, self.dataargs.search_size, self.dataargs.max_answer_length)
 
 		predicted_spans_original = list()
