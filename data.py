@@ -123,8 +123,8 @@ class train_data():
 				# If no answers are given, set the cls_index as answer.
 				if answer_span[0] == -1:
 		#             raise Exception("The answer span does not exist.")
-					tokenized_examples["start_labels"].append(0)
-					tokenized_examples["end_labels"].append(0)
+					tokenized_examples["start_labels"].append(start_index-1)
+					tokenized_examples["end_labels"].append(start_index-1)
 				else:
 					# Start/end character index of the answer in the text.
 					start_char = answer_span[0]
@@ -133,8 +133,8 @@ class train_data():
 					# Detect if the answer is out of the span (in which case this feature is labeled with the last token of the question (start_index - 1)).
 					if not (offsets[start_index][0] <= start_char and offsets[end_index][1] >= end_char):
 		#                 raise Exception("The answer span does not fall in the context.")
-						tokenized_examples["start_labels"].append(0)
-						tokenized_examples["end_labels"].append(0)
+						tokenized_examples["start_labels"].append(start_index-1)
+						tokenized_examples["end_labels"].append(start_index-1)
 					else:
 						# Otherwise move the start_index and end_index to the two ends of the answer.
 						# Note: we could go after the last offset if the answer is the last word (edge case).
@@ -379,7 +379,7 @@ class decode_data(train_data):
 				attention_mask = tokenized_example['attention_mask'][i]
 				# sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
 				# offsets = [None]*eos_index + [(-1,-1)] + offsets[eos_index:end_index+1]
-				offsets = [(-1,-1)] + [None]*(start_index-1) + offsets[start_index:end_index+1]
+				offsets = [None]*(start_index-1) + [(-1,-1)] + offsets[start_index:end_index+1]
 				
 				
 				tokenized_examples["original_input_ids"].append(input_ids)
@@ -616,7 +616,7 @@ class decode_data_longformer(decode_data):
 			attention_mask = tokenized_example['attention_mask']
 			# sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
 			# offsets = [None]*eos_index + [(-1,-1)] + offsets[eos_index:end_index+1]
-			offsets = [None]*(start_index-1) + [(-1,-1)] + offsets[start_index:end_index+1]
+			offsets = [(-1,-1)] + [None]*(start_index-1) + offsets[start_index:end_index+1]
 			
 			tokenized_examples["input_ids"].append(input_ids)
 			tokenized_examples["attention_mask"].append(attention_mask)
