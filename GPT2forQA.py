@@ -212,6 +212,7 @@ class generate_QA():
 
 		self.args = args
 		self.dataargs = dataargs
+		self.data_processor = decode_data()
 
 		# Initialize tokenizer
 		self.tokenizer = AutoTokenizer.from_pretrained(dataargs.tokenizer_path)
@@ -231,13 +232,13 @@ class generate_QA():
 
 	def decode(self):
 
-		decode_data_processor = decode_data()
-
 		if "coqa" in self.dataargs.test_path:
-			qa_dicts = decode_data_processor.data_to_dicts_coqa(self.dataargs.test_path)
+			qa_dicts = self.data_processor.data_to_dicts_coqa(self.dataargs.test_path)
 		elif "quac" in self.dataargs.test_path:
-			qa_dicts = decode_data_processor.data_to_dicts_quac(self.dataargs.test_path)
-		
+			qa_dicts = self.data_processor.data_to_dicts_quac(self.dataargs.test_path)
+		else:
+			raise Exception("Not coqa nor quac.")
+
 		answer_list = list()
 
 		for qa_list in qa_dicts:
@@ -248,99 +249,43 @@ class generate_QA():
 			original_context = qa_list[0]['context']
 
 			for i, qa_dict in enumerate(qa_list):
-				qa_dict = decode_data_processor.add_prompt_decode(qa_dict, predicted_span, previous_qa_dict)
-				tokenized_qa_dict = decode_data_processor.preprocess([qa_dict], self.tokenizer, self.dataargs.max_length, self.dataargs.doc_stride, self.sharp_id, self.space_sharp_id)
+				qa_dict = self.data_processor.add_prompt_decode(qa_dict, predicted_span, previous_qa_dict)
+				tokenized_qa_dict = self.data_processor.preprocess([qa_dict], self.tokenizer, self.dataargs.max_length, self.dataargs.doc_stride, self.sharp_id, self.space_sharp_id)
 				start_logits,end_logits = self.predictor.predict(tokenized_qa_dict).predictions
-				predicted_span, predicted_score = decode_data_processor.postprocess([qa_dict], tokenized_qa_dict, start_logits, end_logits, self.dataargs.search_size, self.dataargs.max_answer_length)
-				predicted_span_original = decode_data_processor.calc_original_span_positions(qa_dict['prompt_positions_original'],predicted_span)
+				predicted_span, predicted_score = self.data_processor.postprocess([qa_dict], tokenized_qa_dict, start_logits, end_logits, self.dataargs.search_size, self.dataargs.max_answer_length)
+				predicted_span_original = self.data_processor.calc_original_span_positions(qa_dict['prompt_positions_original'],predicted_span)
 				previous_qa_dict = qa_dict
 				
 				answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "question": qa_dict['question'], "gold": qa_dict['original_answer'], "answer": original_context[predicted_span_original[0]:predicted_span_original[1]]})
 
 #				self.write(qa_dict, predicted_span, predicted_score, predicted_span_original, original_context)
 
-		self.write_coqa_answer(answer_list)
-
-
-class generate_QA_longformer():
-
-	def __init__(self, args, dataargs):
-
-		self.args = args
-		self.dataargs = dataargs
-
-		# Initialize tokenizer
-		self.tokenizer = AutoTokenizer.from_pretrained(dataargs.tokenizer_path)
-		# Initialize model
-		model = AutoModelForQuestionAnswering.from_pretrained(dataargs.model_path)
-		self.predictor = QALongformerTrainer(model, self.args)
-		self.output_path = path.join(self.args.output_dir,self.dataargs.output_file)
-
-		with open(self.output_path, 'w') as output:
-			output.write("")
-			
-		print("Output to {}.\n".format(self.output_path))
-
-		
-
-	def decode(self):
-
-		decode_data_processor = decode_data_longformer()
-
-		if "coqa" in self.dataargs.test_path:
-			qa_dicts = decode_data_processor.data_to_dicts_coqa(self.dataargs.test_path)
-		elif "quac" in self.dataargs.test_path:
-			qa_dicts = decode_data_processor.data_to_dicts_quac(self.dataargs.test_path)
-		
-		answer_list = list()
-
-		for qa_list in qa_dicts:
-
-			predicted_span = None
-			previous_qa_dict = None
-
-			original_context = qa_list[0]['context']
-
-			for i, qa_dict in enumerate(qa_list):
-				qa_dict = decode_data_processor.add_prompt_decode(qa_dict, predicted_span, previous_qa_dict)
-				tokenized_qa_dict = decode_data_processor.preprocess([qa_dict], self.tokenizer, self.dataargs.max_length, self.dataargs.doc_stride, self.sharp_id, self.space_sharp_id)
-				start_logits,end_logits = self.predictor.predict(tokenized_qa_dict).predictions
-				predicted_span, predicted_score = decode_data_processor.postprocess([qa_dict], tokenized_qa_dict, start_logits, end_logits, self.dataargs.search_size, self.dataargs.max_answer_length)
-				predicted_span_original = decode_data_processor.calc_original_span_positions(qa_dict['prompt_positions_original'],predicted_span)
-				previous_qa_dict = qa_dict
-				
-				answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "question": qa_dict['question'], "gold": qa_dict['original_answer'], "answer": original_context[predicted_span_original[0]:predicted_span_original[1]]})
-
-#				self.write(qa_dict, predicted_span, predicted_score, predicted_span_original, original_context)
-
-		self.write_coqa_answer(answer_list)
-
-
+		# self.write_coqa_answer(answer_list)
+		self.write_quac_answer(answer_list)
 
 
 	def evaluate(self):   ## For evaluation of prompted test dataset.
 
-		eval_data_processor = decode_data_longformer()
-
-		test_dataset = eval_data_processor.load(self.dataargs.test_path)
+		test_dataset = self.data_processor.load(self.dataargs.test_path)
 		
 		answer_list = list()
 
 		# Tokenize dataset & prepared labels
-		tokenized_test_dataset = eval_data_processor.preprocess(test_dataset, self.tokenizer, self.dataargs.max_length, self.dataargs.doc_stride, self.sharp_id, self.space_sharp_id)
+		tokenized_test_dataset = self.data_processor.preprocess(test_dataset, self.tokenizer, self.dataargs.max_length, self.dataargs.doc_stride, self.sharp_id, self.space_sharp_id)
 		start_logits, end_logits = self.predictor.predict(tokenized_test_dataset_sharp_replaced).predictions
-		predicted_spans, predicted_scores = eval_data_processor.postprocess(test_dataset, tokenized_test_dataset, start_logits, end_logits, self.dataargs.search_size, self.dataargs.max_answer_length)
+		predicted_spans, predicted_scores = self.data_processor.postprocess(test_dataset, tokenized_test_dataset, start_logits, end_logits, self.dataargs.search_size, self.dataargs.max_answer_length)
 
 		predicted_spans_original = list()
 		for i, predicted_span in enumerate(predicted_spans):
-			predicted_span_original = eval_data_processor.calc_original_span_positions(test_dataset[i]['prompt_positions_original'],predicted_span)
+			predicted_span_original = self.data_processor.calc_original_span_positions(test_dataset[i]['prompt_positions_original'],predicted_span)
 			predicted_spans_original.append(predicted_span_original)
 				
 		for i, qa_dict in enumerate(test_dataset):
 			answer_list.append({"id": qa_dict['id'], "turn_id" : qa_dict['turn_id'], "question" : qa_dict['question'], "gold" : qa_dict['original_answer'], "answer" : qa_dict['original_context'][predicted_spans_original[i][0]:predicted_spans_original[i][1]]})
 #			self.write(qa_dict, predicted_spans[i], predicted_scores[i], predicted_spans_original[i], qa_dict['original_context'])
 		
-		self.write_coqa_answer(answer_list)
+		# self.write_coqa_answer(answer_list)
+		self.write_quac_answer(answer_list)
 			
 			
 			
@@ -348,6 +293,27 @@ class generate_QA_longformer():
 		with open(self.output_path,'w') as f:
 			json.dump(answer_list,f)
 
+
+	def write_quac_answer(self, answer_list):
+
+		quac_answer_list = {"best_span_str":[], "qid":[], "gold":[]}
+
+		for i in range(len(answer_id)):
+			id = answer_list[i]["id"]
+			turn_id = answer_list[i]["turn_id"]
+			qid = id + "_q#" + str(turn_id-1)
+			gold = answer_list[i]["gold"]
+			answer = answer_list[i]["answer"]
+
+			quac_answer_list["best_span_str"].append(answer)
+			quac_answer_list["gold"].append(gold)
+			quac_answer_list["qid"].append(qid)
+
+		quac_answer_list["yesno"] = ["x"] * len(quac_answer_list["qid"])
+		quac_answer_list["followup"] = ["y"] * len(quac_answer_list["qid"])
+
+		with open(self.output_path,'w') as f:
+			json.dump(quac_answre_list,f)
 
 
 	def write(self, qa_dict, predicted_span, predicted_score, predicted_span_original, original_context):
@@ -379,6 +345,27 @@ class generate_QA_longformer():
 			output.write(qa_dict['original_answer'])
 			output.write("\n")
 			output.write("=============================\n")
+
+
+class generate_QA_longformer(generate_QA):
+
+	def __init__(self, args, dataargs):
+
+		self.args = args
+		self.dataargs = dataargs
+		self.data_processor = decode_data_longformer()
+
+		# Initialize tokenizer
+		self.tokenizer = AutoTokenizer.from_pretrained(dataargs.tokenizer_path)
+		# Initialize model
+		model = AutoModelForQuestionAnswering.from_pretrained(dataargs.model_path)
+		self.predictor = QALongformerTrainer(model, self.args)
+		self.output_path = path.join(self.args.output_dir,self.dataargs.output_file)
+
+		with open(self.output_path, 'w') as output:
+			output.write("")
+			
+		print("Output to {}.\n".format(self.output_path))
 
 
 
