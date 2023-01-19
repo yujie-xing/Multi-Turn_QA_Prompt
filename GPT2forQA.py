@@ -298,7 +298,7 @@ class generate_QA():
 
 		quac_answer_list = {"best_span_str":[], "qid":[], "gold":[]}
 
-		for i in range(len(answer_id)):
+		for i in range(len(answer_list)):
 			id = answer_list[i]["id"]
 			turn_id = answer_list[i]["turn_id"]
 			qid = id + "_q#" + str(turn_id-1)
@@ -313,7 +313,7 @@ class generate_QA():
 		quac_answer_list["followup"] = ["y"] * len(quac_answer_list["qid"])
 
 		with open(self.output_path,'w') as f:
-			json.dump(quac_answre_list,f)
+			json.dump(quac_answer_list,f)
 
 
 	def write(self, qa_dict, predicted_span, predicted_score, predicted_span_original, original_context):
