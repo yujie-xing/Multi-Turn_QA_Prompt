@@ -507,23 +507,26 @@ class train_data_longformer(train_data):
 		
 		# eos_id = tokenizer.eos_token_id
 		tokenized_examples = {"input_ids":list(),"attention_mask":list(),"start_positions":list(),"end_positions":list()}
-		
-		for example in dataset:
-			
-			tokenized_example = tokenizer(
-				example["question"],
-				example["context"],
-				truncation='only_second',
-				return_offsets_mapping=True,
-				padding="max_length",
-			)
-			
 
+		tokenized = tokenizer(
+			[example['question'] for example in dataset],
+			[example["context"] for example in dataset],
+			truncation='only_second',
+			return_offsets_mapping=True,
+			padding="longest",
+		)
+
+
+		tokenized_examples["input_ids"] = tokenized["input_ids"]
+		tokenized_examples["attention_mask"] = tokenized["attention_mask"]
+
+		for num in range(len(tokenized['offset_mapping'])):
+			
 			# The offset mappings will give us a map from token to character position in the original context. This will
 			# help us compute the start_positions and end_positions.
-			offsets = tokenized_example.pop("offset_mapping")
+			offsets = tokenized["offset_mapping"][num]
 				
-			sequence_ids = tokenized_example.sequence_ids().copy()
+			sequence_ids = tokenized.sequence_ids(num)
 				
 			start_index = 0
 			while sequence_ids[start_index] != 1:
@@ -533,26 +536,16 @@ class train_data_longformer(train_data):
 			while sequence_ids[end_index] != 1:
 				end_index -= 1
 				
-			# input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:]
-			input_ids = tokenized_example['input_ids']
-			# attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:]
-			attention_mask = tokenized_example['attention_mask']
-			# sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
-			# offsets = offsets[:eos_index] + [(-1,-1)] + offsets[eos_index:end_index + 1]
 			offsets = [None]*(start_index-1) + [(-1,-1)] + offsets[start_index:end_index+1]
-			
-				
-			tokenized_examples["input_ids"].append(input_ids)
-			tokenized_examples["attention_mask"].append(attention_mask)
 		
-			# We will label impossible answers with the index of the last token of the question (start_index - 1).
+			# We will label impossible answers with the cls_label (token index = 0).
 
-			answer_span = example["answer_span"]
+			answer_span = dataset[num]["answer_span"]
 			# If no answers are given, set the cls_index as answer.
 			if answer_span[0] == -1:
 	#             raise Exception("The answer span does not exist.")
-				tokenized_examples["start_positions"].append(start_index-1)
-				tokenized_examples["end_positions"].append(start_index-1)
+				tokenized_examples["start_positions"].append(0)
+				tokenized_examples["end_positions"].append(0)
 			else:
 				# Start/end character index of the answer in the text.
 				start_char = answer_span[0]
@@ -561,8 +554,8 @@ class train_data_longformer(train_data):
 				# Detect if the answer is out of the span (in which case this feature is labeled with the last token of the question (start_index - 1)).
 				if not (offsets[start_index][0] <= start_char and offsets[end_index][1] >= end_char):
 	#                 raise Exception("The answer span does not fall in the context.")
-					tokenized_examples["start_positions"].append(start_index-1)
-					tokenized_examples["end_positions"].append(start_index-1)
+					tokenized_examples["start_positions"].append(0)
+					tokenized_examples["end_positions"].append(0)
 				else:
 					# Otherwise move the start_index and end_index to the two ends of the answer.
 					# Note: we could go after the last offset if the answer is the last word (edge case).
@@ -582,25 +575,28 @@ class decode_data_longformer(decode_data):
 		
 		# eos_id = tokenizer.eos_token_id
 		tokenized_examples = {"input_ids":list(),"attention_mask":list(),"ids":list(),"turn_ids":list(),"offset_mappings":list()}
-		
-		for example in dataset:
-			
-			tokenized_example = tokenizer(
-				example["question"],
-				example["context"],
-				truncation='only_second',
-				return_offsets_mapping=True,
-				padding="max_length",
-			)
+
+		tokenized = tokenizer(
+			[example['question'] for example in dataset],
+			[example['context'] for example in dataset],
+			truncation='only_second',
+			return_offsets_mapping=True,
+			padding="longest",
+		)
+
+		tokenized_examples["input_ids"] = tokenized["input_ids"]
+		tokenized_examples["attention_mask"] = tokenized["attention_mask"]
+
+		for num in range(len(tokenized["offset_mapping"])):
 
 			# The offset mappings will give us a map from token to character position in the original context. This will
 			# help us compute the start_positions and end_positions.
-			offsets = tokenized_example.pop("offset_mapping")
+			offsets = tokenized["offset_mapping"][num]
 
-			tokenized_examples["ids"].append(example["id"])
-			tokenized_examples["turn_ids"].append(example["turn_id"])
+			tokenized_examples["ids"].append(dataset[num]["id"])
+			tokenized_examples["turn_ids"].append(dataset[num]["turn_id"])
 				
-			sequence_ids = tokenized_example.sequence_ids()
+			sequence_ids = tokenized.sequence_ids(num)
 				
 			start_index = 0
 			while sequence_ids[start_index] != 1:
@@ -610,16 +606,8 @@ class decode_data_longformer(decode_data):
 			while sequence_ids[end_index] != 1:
 				end_index -= 1
 					
-			# input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:]
-			input_ids = tokenized_example['input_ids']
-			# attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:]
-			attention_mask = tokenized_example['attention_mask']
-			# sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
-			# offsets = [None]*eos_index + [(-1,-1)] + offsets[eos_index:end_index+1]
 			offsets = [(-1,-1)] + [None]*(start_index-1) + offsets[start_index:end_index+1]
 			
-			tokenized_examples["input_ids"].append(input_ids)
-			tokenized_examples["attention_mask"].append(attention_mask)
 			tokenized_examples["offset_mappings"].append(offsets)
 
 		return Dataset.from_dict(tokenized_examples)
@@ -627,7 +615,7 @@ class decode_data_longformer(decode_data):
 
 def train_dev_test(coqa_path):
 	data_processor = train_data_longformer()
-	# test_data_processor = decode_data()
+	test_data_processor = decode_data_longformer()
 	train_dataset = data_processor.load(coqa_path)
 
 	# Initialize tokenizer
@@ -636,37 +624,39 @@ def train_dev_test(coqa_path):
 	# special_tokens_dict = {'pad_token': '<|paddingtokencustomized|>'}
 	# tokenizer.add_special_tokens(special_tokens_dict)
 	tokenizer = AutoTokenizer.from_pretrained("mrm8488/longformer-base-4096-finetuned-squadv2")
-	# sharp_id = tokenizer.vocab["<"]
-	# space_sharp_id = tokenizer.vocab["Ġ<"]
+	sharp_id = tokenizer.vocab["<"]
+	space_sharp_id = tokenizer.vocab["Ġ<"]
 
 	# Tokenize dataset & prepared labels
 	# tokenized_train_dataset = data_processor.preprocess(train_dataset[:], tokenizer, 1020, 128, sharp_id, space_sharp_id)
-	tokenized_train_dataset = data_processor.preprocess(train_dataset, tokenizer)
-	# tokenized_test_dataset = test_data_processor.preprocess(train_dataset[:], tokenizer, 1020, 128, sharp_id, space_sharp_id)
+	tokenized_train_dataset = data_processor.preprocess(train_dataset[:1], tokenizer)
+	tokenized_test_dataset = test_data_processor.preprocess(train_dataset[:1], tokenizer, 1020, 128, sharp_id, space_sharp_id)
 
 	num = 0
-	num1 = 0
 
-	# print(tokenized_train_dataset["input_ids"][0]==tokenized_test_dataset["input_ids"][0])
+	print(tokenized_train_dataset["input_ids"][num]==tokenized_test_dataset["input_ids"][num])
 
-	# print(train_dataset[num]['context'][train_dataset[num]['answer_span'][0]:train_dataset[num]['answer_span'][1]])
+	print(train_dataset[num]['context'][train_dataset[num]['answer_span'][0]:train_dataset[num]['answer_span'][1]])
 
-	# print(len(tokenized_train_dataset['input_ids']))
-	# print(tokenizer.decode(tokenized_train_dataset[num1]['input_ids'][tokenized_train_dataset[num1]['start_labels']:tokenized_train_dataset[num1]['end_labels']+1]))
-
+	print(len(tokenized_train_dataset['input_ids']))
+	print(tokenizer.decode(tokenized_train_dataset[num]['input_ids'][tokenized_train_dataset[num]['start_positions']:tokenized_train_dataset[num]['end_positions']+1]))
 
 
 
-def decode_test(coqa_path):
 
-	data = decode_data()
+def decode_test(quac_path):
 
-	tokenizer = AutoTokenizer.from_pretrained('gpt2')
-	tokenizer.pad_token = tokenizer.eos_token
+	data = decode_data_longformer()
+
+	tokenizer = AutoTokenizer.from_pretrained("mrm8488/longformer-base-4096-finetuned-squadv2")
+	# tokenizer = AutoTokenizer.from_pretrained('gpt2')
+	# tokenizer.pad_token = tokenizer.eos_token
 	# special_tokens_dict = {'pad_token': '<|paddingtokencustomized|>'}
 	# tokenizer.add_special_tokens(special_tokens_dict)
+	sharp_id = tokenizer.vocab["<"]
+	space_sharp_id = tokenizer.vocab["Ġ<"]
 
-	qa_dicts = data.data_to_dicts_coqa(coqa_path)
+	qa_dicts = data.data_to_dicts_quac(quac_path)
 
 	qa_list = qa_dicts[2409]
 	print(len(qa_list))
@@ -713,6 +703,6 @@ if __name__ == "__main__":
 	quac_dev_path = 'dataset/quac-dev.json'
 	quac_train_prompted_path = 'dataset/quac-train-prompted.json'
 
-	train_dev_test(quac_train_prompted_path)
+	# train_dev_test(quac_train_prompted_path)
 
-	# decode_test(coqa_train_path)
+	decode_test(quac_train_path)
