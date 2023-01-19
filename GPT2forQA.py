@@ -1,5 +1,6 @@
 from typing import Optional, Tuple, Union
 from os import path
+from collections import defaultdict
 import json
 import torch
 from torch import nn
@@ -299,15 +300,25 @@ class generate_QA():
 
 	def write_quac_answer(self, answer_list):
 
-		quac_answer_list = {"best_span_str":[], "qid":[], "gold":[], "span":[]}
+		with open(self.output_path,'w') as f:
+			f.write("")
 
-		for i in range(len(answer_list)):
-			id = answer_list[i]["id"]
-			turn_id = answer_list[i]["turn_id"]
+		quac_answer_list = {"best_span_str":[], "qid":[], "gold":[], "span":[], "yesno":[], "followup":[]}
+		id0 = answer_list[0]['id']
+
+		for answers in answer_list:
+			id = answers["id"]
+			if id != id0:
+				with open(self.output_path,'a') as f:
+					json.dump(quac_answer_list,f)
+					f.write('\n')
+				quac_answer_list = {"best_span_str":[], "qid":[], "gold":[], "span":[], "yesno":[], "followup":[]}
+				id0 = id
+			turn_id = answers["turn_id"]
 			qid = id + "_q#" + str(turn_id-1)
-			gold = answer_list[i]["gold"]
-			answer = answer_list[i]["answer"]
-			span = answer_list[i]["span"]
+			gold = answers["gold"]
+			answer = answers["answer"]
+			span = answers["span"]
 
 			if span[0] == -1 and span[1] == -1:
 				quac_answer_list["best_span_str"].append("CANNOTANSWER")
@@ -317,12 +328,18 @@ class generate_QA():
 			quac_answer_list["gold"].append(gold)
 			quac_answer_list["qid"].append(qid)
 			quac_answer_list["span"].append(span)
+			quac_answer_list["yesno"].append("x")
+			quac_answer_list["followup"].append("y")
 
-		quac_answer_list["yesno"] = ["x"] * len(quac_answer_list["qid"])
-		quac_answer_list["followup"] = ["y"] * len(quac_answer_list["qid"])
 
-		with open(self.output_path,'w') as f:
+		with open(self.output_path,'a') as f:
 			json.dump(quac_answer_list,f)
+			f.write('\n')
+
+
+
+
+		
 
 
 	def write(self, qa_dict, predicted_span, predicted_score, predicted_span_original, original_context):
