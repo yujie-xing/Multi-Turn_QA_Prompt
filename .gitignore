@@ -14,3 +14,4 @@ requirements
 /prompt_QA_coqa_full/*
 /prompt_QA_orig_quac/*
 /prompt_QA_longformer/*
+eval.json

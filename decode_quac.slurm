@@ -12,6 +12,6 @@
 module load Python/3.9.6-GCCcore-11.2.0
 module load CUDA/11.3.1
 source news/bin/activate
-python3 decode.py --test_path "dataset/quac-dev.json" --output_file "quac_answers_decode.json" --tokenizer_path "prompt_QA_orig_quac/tokenizer" --model_path "prompt_QA_orig_quac" --disable_tqdm True --search_size 50 --max_answer_length 20 --decode --output_dir "output" --evaluation_strategy "epoch"
+python3 decode.py --test_path "dataset/quac-dev.json" --output_file "quac_answers_decode.json" --tokenizer_path "prompt_QA_orig_quac/tokenizer" --model_path "prompt_QA_orig_quac" --disable_tqdm True --search_size 50 --max_answer_length 64 --decode --output_dir "output" --evaluation_strategy "epoch"
 
 deactivate
