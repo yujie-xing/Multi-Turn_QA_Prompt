@@ -433,6 +433,7 @@ class decode_data(train_data):
 				# Update minimum null prediction.
 				# eos_index = offset_mapping.index([-1,-1])
 				null_index = offset_mapping.index([-1,-1])
+				assert null_index == 0  # for longformer
 				null_score = start_logit[null_index] + end_logit[null_index]
 
 				best_score = null_score
