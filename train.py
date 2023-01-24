@@ -46,6 +46,9 @@ dev_dataset = data_processor.load(dataargs.dev_path)
 if dataargs.only_lm:
 	train_dataset  = data_processor.data_to_dicts_coqa(dataargs.train_path)
 	dev_dataset  = data_processor.data_to_dicts_coqa(dataargs.dev_path)
+	train_dataset = [qa_dict for qa_list in train_dataset for qa_dict in qa_list]
+	dev_dataset = [qa_dict for qa_list in dev_dataset for qa_dict in qa_list]
+	
 
 # Initialize tokenizer
 tokenizer = AutoTokenizer.from_pretrained(dataargs.tokenizer_path)
