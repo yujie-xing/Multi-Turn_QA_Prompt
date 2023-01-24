@@ -112,7 +112,7 @@ class train_data():
 			for i, offsets in enumerate(offset_mapping):
 				
 				sequence_ids = tokenized_example.sequence_ids(i)
-				sequence_ids_target = tokenized_target.sequence_ids(0)
+				sequence_ids_target = tokenized_target.sequence_ids()
 				
 				start_index = 0
 				while sequence_ids[start_index] != 1:
@@ -129,7 +129,7 @@ class train_data():
 					target_end_index -= 1
 				
 				input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:]
-				target_ids = tokenized_target['input_ids'][0][:target_end_index+1] + [eos_id] + tokenized_target['input_ids'][0][target_end_index+1:]
+				target_ids = tokenized_target['input_ids'][:target_end_index+1] + [eos_id] + tokenized_target['input_ids'][target_end_index+1:]
 				# input_ids = tokenized_example['input_ids'][i]
 				attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:]
 				# attention_mask = tokenized_example['attention_mask'][i]
