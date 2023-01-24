@@ -43,6 +43,9 @@ except:  ## Only for test
 data_processor = train_data()
 train_dataset = data_processor.load(dataargs.train_path)
 dev_dataset = data_processor.load(dataargs.dev_path)
+if dataargs.only_lm:
+	train_dataset  = data_processor.data_to_dicts_coqa(dataargs.train_path)
+	dev_dataset  = data_processor.data_to_dicts_coqa(dataargs.dev_path)
 
 # Initialize tokenizer
 tokenizer = AutoTokenizer.from_pretrained(dataargs.tokenizer_path)

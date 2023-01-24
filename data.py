@@ -73,6 +73,85 @@ class train_data():
 
 		return data
 
+	def data_to_dicts_coqa(self, path):
+
+		qa_dicts = list()
+
+		# turn data to a dict that contain necessary informations. Need to write your own.
+		# taking coqa as an example.
+
+		with open(path) as file:
+			data = json.load(file)
+			data = data["data"]
+			
+		for article in data:
+
+			qa_list = list()
+
+			id = article['id']
+			context = article['story']
+			questions = article['questions']
+			answers = article['answers']
+
+			for num in range(len(questions)):
+				question = questions[num]['input_text']
+				answer = answers[num]['span_text']
+				answer_start = answers[num]['span_start']
+				answer_end = answers[num]['span_end']
+				answer_end = answers[num]['span_end'] # context[start : end] = answer.
+				human_answer = answers[num]['input_text']
+
+				turn_id_q = questions[num]['turn_id']
+				turn_id_a = answers[num]['turn_id']
+				if turn_id_q != turn_id_a:
+					raise Exception("Turn id does not match")
+				else:
+					turn_id = turn_id_q
+
+				qa_dict = {'id': id, 'context': context, 'turn_id': turn_id, 'question': question, 'answer' : answer, 'answer_span': (answer_start,answer_end), 'human_answer': human_answer}
+				qa_list.append(qa_dict)
+			qa_dicts.append(qa_list)
+
+		return qa_dicts
+
+
+	def data_to_dicts_quac(self, path):
+
+		qa_dicts = list()
+
+		# turn data to a dict that contain necessary informations. Need to write your own.
+		# taking coqa as an example.
+
+		with open(path) as file:
+			data = json.load(file)
+			data = data["data"]
+			
+		for article in data:
+			for paragraph in article['paragraphs']:
+
+				qa_list = list()
+
+				id = paragraph['id']
+				context = paragraph['context']
+				qas = paragraph['qas']
+
+				for turn_id in range(len(qas)):
+					question = qas[turn_id]['question']
+					answer = qas[turn_id]['orig_answer']['text']
+					if answer == 'CANNOTANSWER':
+						answer_start = -1
+						answer_end = -1
+					else:
+						answer_start = int(qas[turn_id]['orig_answer']['answer_start'])
+						answer_end = answer_start + len(answer)  # context[start : end] = answer.
+					human_answer = answer
+
+					qa_dict = {'id': id, 'context': context, 'turn_id': turn_id+1, 'question': question, 'answer' : answer, 'answer_span': (answer_start,answer_end), 'human_answer': human_answer}
+					qa_list.append(qa_dict)
+				qa_dicts.append(qa_list)
+
+		return qa_dicts
+
 	def preprocess(self, dataset, tokenizer, max_length, doc_stride, sharp_id, space_sharp_id):
 
 		# Tokenize our examples with truncation and padding, but keep the overflows using a stride. This results
@@ -80,7 +159,7 @@ class train_data():
 		# context that overlaps a bit the context of the previous feature.
 		
 		eos_id = tokenizer.eos_token_id
-		tokenized_examples = {"original_input_ids":list(),"input_ids":list(),"target_ids":list(),"attention_mask":list(),"token_type_ids":list(),"start_positions":list(),"end_positions":list()}
+		tokenized_examples = {"input_ids":list(),"target_ids":list(),"attention_mask":list(),"token_type_ids":list(),"start_positions":list(),"end_positions":list()}
 		
 		for example in dataset:
 			
@@ -188,85 +267,6 @@ class train_data():
 
 
 class decode_data(train_data):
-
-	def data_to_dicts_coqa(self, path):
-
-		qa_dicts = list()
-
-		# turn data to a dict that contain necessary informations. Need to write your own.
-		# taking coqa as an example.
-
-		with open(path) as file:
-			data = json.load(file)
-			data = data["data"]
-			
-		for article in data:
-
-			qa_list = list()
-
-			id = article['id']
-			context = article['story']
-			questions = article['questions']
-			answers = article['answers']
-
-			for num in range(len(questions)):
-				question = questions[num]['input_text']
-				answer = answers[num]['span_text']
-				answer_start = answers[num]['span_start']
-				answer_end = answers[num]['span_end']
-				answer_end = answers[num]['span_end'] # context[start : end] = answer.
-				human_answer = answers[num]['input_text']
-
-				turn_id_q = questions[num]['turn_id']
-				turn_id_a = answers[num]['turn_id']
-				if turn_id_q != turn_id_a:
-					raise Exception("Turn id does not match")
-				else:
-					turn_id = turn_id_q
-
-				qa_dict = {'id': id, 'context': context, 'turn_id': turn_id, 'question': question, 'answer' : answer, 'answer_span': (answer_start,answer_end), 'human_answer': human_answer}
-				qa_list.append(qa_dict)
-			qa_dicts.append(qa_list)
-
-		return qa_dicts
-
-
-	def data_to_dicts_quac(self, path):
-
-		qa_dicts = list()
-
-		# turn data to a dict that contain necessary informations. Need to write your own.
-		# taking coqa as an example.
-
-		with open(path) as file:
-			data = json.load(file)
-			data = data["data"]
-			
-		for article in data:
-			for paragraph in article['paragraphs']:
-
-				qa_list = list()
-
-				id = paragraph['id']
-				context = paragraph['context']
-				qas = paragraph['qas']
-
-				for turn_id in range(len(qas)):
-					question = qas[turn_id]['question']
-					answer = qas[turn_id]['orig_answer']['text']
-					if answer == 'CANNOTANSWER':
-						answer_start = -1
-						answer_end = -1
-					else:
-						answer_start = int(qas[turn_id]['orig_answer']['answer_start'])
-						answer_end = answer_start + len(answer)  # context[start : end] = answer.
-					human_answer = answer
-
-					qa_dict = {'id': id, 'context': context, 'turn_id': turn_id+1, 'question': question, 'answer' : answer, 'answer_span': (answer_start,answer_end), 'human_answer': human_answer}
-					qa_list.append(qa_dict)
-				qa_dicts.append(qa_list)
-
-		return qa_dicts
 
 
 	def add_prompt_decode(self, qa_dict, predicted_span, previous_qa_dict):
