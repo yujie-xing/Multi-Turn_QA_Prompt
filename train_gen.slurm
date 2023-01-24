@@ -13,6 +13,6 @@ module purge
 module load Python/3.9.6-GCCcore-11.2.0
 module load CUDA/11.3.1
 source news/bin/activate
-python3 train.py --train_path "dataset/coqa-train-prompted.json" --dev_path "dataset/coqa-dev-prompted.json" --model_path "gpt2" --tokenizer_path "gpt2" --output_dir "prompt_QA_gen" -- auto_find_batch_size --disable_tqdm True --num_train_epochs 10 --load_best_model_at_end True --save_strategy "epoch" --evaluation_strategy "epoch" --learning_rate 3e-5 --weight_decay 0.01
+python3 train.py --only_lm --train_path "dataset/coqa-train-prompted.json" --dev_path "dataset/coqa-dev-prompted.json" --model_path "gpt2" --tokenizer_path "gpt2" --output_dir "prompt_gen" --auto_find_batch_size --disable_tqdm True --num_train_epochs 10 --load_best_model_at_end True --save_strategy "epoch" --evaluation_strategy "epoch" --learning_rate 3e-5 --weight_decay 0.01
 
 deactivate

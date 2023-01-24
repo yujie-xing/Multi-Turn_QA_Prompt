@@ -1,12 +1,17 @@
-
 from os import path, mkdir, environ
 import json, pickle
 import torch
-import transformers
+import transformers, optuna
 from transformers import HfArgumentParser, TrainingArguments
 from transformers import AutoTokenizer, AutoModel, AutoConfig
 from data import DataArguments, train_data
 from GPT2forQA import *
+
+def my_hp_space(trial):
+    return {
+        "learning_rate": trial.suggest_float("learning_rate", 3e-5, 6e-5),
+        "num_train_epochs": trial.suggest_int("num_train_epochs", 5, 10),
+        }
 
 #===============================
 # Parser -> args
@@ -43,25 +48,43 @@ dev_dataset = data_processor.load(dataargs.dev_path)
 tokenizer = AutoTokenizer.from_pretrained(dataargs.tokenizer_path)
 sharp_id = tokenizer.vocab["<"]
 space_sharp_id = tokenizer.vocab["Ġ<"]
-tokenizer.pad_token = tokenizer.eos_token
-# special_tokens_dict = {'pad_token': '<|paddingtokencustomized|>'}
-# tokenizer.add_special_tokens(special_tokens_dict)
+# tokenizer.pad_token = tokenizer.eos_token
+special_tokens_dict = {'pad_token': '<|padding|>'}
+tokenizer.add_special_tokens(special_tokens_dict)
 
 # Tokenize dataset & prepared labels
 tokenized_train_dataset = data_processor.preprocess(train_dataset, tokenizer, dataargs.max_length, dataargs.doc_stride, sharp_id, space_sharp_id)
 tokenized_dev_dataset = data_processor.preprocess(dev_dataset, tokenizer, dataargs.max_length, dataargs.doc_stride, sharp_id, space_sharp_id)
 
-print("data tokenized")
+if dataargs.only_lm:
+	print("Training without QA support")
+	tokenized_train_dataset = tokenized_train_dataset.remove_columns(['start_positions','end_positions'])
+	tokenized_dev_dataset = tokenized_dev_dataset.remove_columns(['start_positions','end_positions'])
+if dataargs.only_qa:
+	print("Training QA part")
+	tokenized_train_dataset = tokenized_train_dataset.remove_columns('target_ids')
+	tokenized_dev_dataset = tokenized_dev_dataset.remove_columns('target_ids')
+else:
+	print("data tokenized")
 
 #===============================
 # Initialize config
 config = AutoConfig.from_pretrained(dataargs.model_path)
 config.pad_token_id = tokenizer.pad_token_id
 config.eos_token_id = tokenizer.eos_token_id
+config.vocab_size += 1
 
 # Initialize model
-model = GPT2forQA(config).from_pretrained(dataargs.model_path)
-model.resize_token_embeddings(len(tokenizer))
+if dataargs.fine_tune:
+	model = GPT2forQA.from_pretrained(dataargs.model_path)
+else:
+	pre_trained_model = AutoModel.from_pretrained(dataargs.model_path)
+	model = GPT2forQA(config)
+	model.transformer = pre_trained_model
+	model.resize_token_embeddings(len(tokenizer))
+
+def model_init(trial):
+	return model
 
 # Fix main weights in the model
 #for param in model.transformer.parameters():
@@ -73,14 +96,14 @@ print("model initialized")
 #===============================
 # Initialize Trainer
 trainer = QATrainer(
-	model,
-	args,
+	args=args,
 	train_dataset=tokenized_train_dataset,
 	eval_dataset=tokenized_dev_dataset,
-)
+	model_init=model_init)
 
 # Train
-trainer.train()
+# trainer.train()
+trainer.hyperparameter_search(direction="minimize", backend="optuna", hp_space=my_hp_space, n_trials=10)
 
 #===============================
 # Save model & tokenizer

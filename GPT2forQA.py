@@ -15,71 +15,71 @@ from data import decode_data, decode_data_longformer
 
 
 GPT2_INPUTS_DOCSTRING = r"""
-    Args:
-        input_ids (`torch.LongTensor` of shape `(batch_size, input_ids_length)`):
-            `input_ids_length` = `sequence_length` if `past_key_values` is `None` else
-            `past_key_values[0][0].shape[-2]` (`sequence_length` of input past key value states). Indices of input
-            sequence tokens in the vocabulary.
+	Args:
+		input_ids (`torch.LongTensor` of shape `(batch_size, input_ids_length)`):
+			`input_ids_length` = `sequence_length` if `past_key_values` is `None` else
+			`past_key_values[0][0].shape[-2]` (`sequence_length` of input past key value states). Indices of input
+			sequence tokens in the vocabulary.
 
-            If `past_key_values` is used, only `input_ids` that do not have their past calculated should be passed as
-            `input_ids`.
+			If `past_key_values` is used, only `input_ids` that do not have their past calculated should be passed as
+			`input_ids`.
 
-            Indices can be obtained using [`GPT2Tokenizer`]. See [`PreTrainedTokenizer.encode`] and
-            [`PreTrainedTokenizer.__call__`] for details.
+			Indices can be obtained using [`GPT2Tokenizer`]. See [`PreTrainedTokenizer.encode`] and
+			[`PreTrainedTokenizer.__call__`] for details.
 
-            [What are input IDs?](../glossary#input-ids)
-        past_key_values (`Tuple[Tuple[torch.Tensor]]` of length `config.n_layers`):
-            Contains precomputed hidden-states (key and values in the attention blocks) as computed by the model (see
-            `past_key_values` output below). Can be used to speed up sequential decoding. The `input_ids` which have
-            their past given to this model should not be passed as `input_ids` as they have already been computed.
-        attention_mask (`torch.FloatTensor` of shape `(batch_size, sequence_length)`, *optional*):
-            Mask to avoid performing attention on padding token indices. Mask values selected in `[0, 1]`:
+			[What are input IDs?](../glossary#input-ids)
+		past_key_values (`Tuple[Tuple[torch.Tensor]]` of length `config.n_layers`):
+			Contains precomputed hidden-states (key and values in the attention blocks) as computed by the model (see
+			`past_key_values` output below). Can be used to speed up sequential decoding. The `input_ids` which have
+			their past given to this model should not be passed as `input_ids` as they have already been computed.
+		attention_mask (`torch.FloatTensor` of shape `(batch_size, sequence_length)`, *optional*):
+			Mask to avoid performing attention on padding token indices. Mask values selected in `[0, 1]`:
 
-            - 1 for tokens that are **not masked**,
-            - 0 for tokens that are **masked**.
+			- 1 for tokens that are **not masked**,
+			- 0 for tokens that are **masked**.
 
-            If `past_key_values` is used, `attention_mask` needs to contain the masking strategy that was used for
-            `past_key_values`. In other words, the `attention_mask` always has to have the length:
-            `len(past_key_values) + len(input_ids)`
+			If `past_key_values` is used, `attention_mask` needs to contain the masking strategy that was used for
+			`past_key_values`. In other words, the `attention_mask` always has to have the length:
+			`len(past_key_values) + len(input_ids)`
 
-            [What are attention masks?](../glossary#attention-mask)
-        token_type_ids (`torch.LongTensor` of shape `(batch_size, input_ids_length)`, *optional*):
-            Segment token indices to indicate first and second portions of the inputs. Indices are selected in `[0,
-            1]`:
+			[What are attention masks?](../glossary#attention-mask)
+		token_type_ids (`torch.LongTensor` of shape `(batch_size, input_ids_length)`, *optional*):
+			Segment token indices to indicate first and second portions of the inputs. Indices are selected in `[0,
+			1]`:
 
-            - 0 corresponds to a *sentence A* token,
-            - 1 corresponds to a *sentence B* token.
+			- 0 corresponds to a *sentence A* token,
+			- 1 corresponds to a *sentence B* token.
 
-            [What are token type IDs?](../glossary#token-type-ids)
-        position_ids (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
-            Indices of positions of each input sequence tokens in the position embeddings. Selected in the range `[0,
-            config.max_position_embeddings - 1]`.
+			[What are token type IDs?](../glossary#token-type-ids)
+		position_ids (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
+			Indices of positions of each input sequence tokens in the position embeddings. Selected in the range `[0,
+			config.max_position_embeddings - 1]`.
 
-            [What are position IDs?](../glossary#position-ids)
-        head_mask (`torch.FloatTensor` of shape `(num_heads,)` or `(num_layers, num_heads)`, *optional*):
-            Mask to nullify selected heads of the self-attention modules. Mask values selected in `[0, 1]`:
+			[What are position IDs?](../glossary#position-ids)
+		head_mask (`torch.FloatTensor` of shape `(num_heads,)` or `(num_layers, num_heads)`, *optional*):
+			Mask to nullify selected heads of the self-attention modules. Mask values selected in `[0, 1]`:
 
-            - 1 indicates the head is **not masked**,
-            - 0 indicates the head is **masked**.
+			- 1 indicates the head is **not masked**,
+			- 0 indicates the head is **masked**.
 
-        inputs_embeds (`torch.FloatTensor` of shape `(batch_size, sequence_length, hidden_size)`, *optional*):
-            Optionally, instead of passing `input_ids` you can choose to directly pass an embedded representation. This
-            is useful if you want more control over how to convert `input_ids` indices into associated vectors than the
-            model's internal embedding lookup matrix.
+		inputs_embeds (`torch.FloatTensor` of shape `(batch_size, sequence_length, hidden_size)`, *optional*):
+			Optionally, instead of passing `input_ids` you can choose to directly pass an embedded representation. This
+			is useful if you want more control over how to convert `input_ids` indices into associated vectors than the
+			model's internal embedding lookup matrix.
 
-            If `past_key_values` is used, optionally only the last `inputs_embeds` have to be input (see
-            `past_key_values`).
-        use_cache (`bool`, *optional*):
-            If set to `True`, `past_key_values` key value states are returned and can be used to speed up decoding (see
-            `past_key_values`).
-        output_attentions (`bool`, *optional*):
-            Whether or not to return the attentions tensors of all attention layers. See `attentions` under returned
-            tensors for more detail.
-        output_hidden_states (`bool`, *optional*):
-            Whether or not to return the hidden states of all layers. See `hidden_states` under returned tensors for
-            more detail.
-        return_dict (`bool`, *optional*):
-            Whether or not to return a [`~utils.ModelOutput`] instead of a plain tuple.
+			If `past_key_values` is used, optionally only the last `inputs_embeds` have to be input (see
+			`past_key_values`).
+		use_cache (`bool`, *optional*):
+			If set to `True`, `past_key_values` key value states are returned and can be used to speed up decoding (see
+			`past_key_values`).
+		output_attentions (`bool`, *optional*):
+			Whether or not to return the attentions tensors of all attention layers. See `attentions` under returned
+			tensors for more detail.
+		output_hidden_states (`bool`, *optional*):
+			Whether or not to return the hidden states of all layers. See `hidden_states` under returned tensors for
+			more detail.
+		return_dict (`bool`, *optional*):
+			Whether or not to return a [`~utils.ModelOutput`] instead of a plain tuple.
 """
 
 
@@ -101,6 +101,8 @@ class GPT2forQA(GPT2ForTokenClassification):
 		
 		### self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 		self.classifier = nn.Linear(config.hidden_size, self.num_labels)  # Only need 2 labels: start and end
+		self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+		self.pad_token_id = config.pad_token_id
 
 		# Model parallel
 		self.model_parallel = False
@@ -126,14 +128,15 @@ class GPT2forQA(GPT2ForTokenClassification):
 	def forward(
 		self,
 		input_ids: Optional[torch.LongTensor] = None,
+		target_ids: Optional[torch.LongTensor] = None,
 		past_key_values: Optional[Tuple[Tuple[torch.Tensor]]] = None,
 		attention_mask: Optional[torch.FloatTensor] = None,
 		token_type_ids: Optional[torch.LongTensor] = None,
 		position_ids: Optional[torch.LongTensor] = None,
 		head_mask: Optional[torch.FloatTensor] = None,
 		inputs_embeds: Optional[torch.FloatTensor] = None,
-		start_labels: Optional[torch.LongTensor] = None,
-		end_labels: Optional[torch.LongTensor] = None,
+		start_positions: Optional[torch.LongTensor] = None,
+		end_positions: Optional[torch.LongTensor] = None,
 		use_cache: Optional[bool] = None,
 		output_attentions: Optional[bool] = None,
 		output_hidden_states: Optional[bool] = None,
@@ -163,19 +166,33 @@ class GPT2forQA(GPT2ForTokenClassification):
 
 		hidden_states = transformer_outputs[0]
 		hidden_states = self.dropout(hidden_states)
-		logits = self.classifier(hidden_states)
+		QA_logits = self.classifier(hidden_states)
+		lm_logits = self.lm_head(hidden_states)
 
 		### Split start and end logits. 0 for start and 1 for end
-		start_logits = logits[:,:,0]
-		end_logits = logits[:,:,1]
+		start_logits = QA_logits[:,:,0]
+		end_logits = QA_logits[:,:,1]
 
-		loss = None
-		if start_labels is not None and end_labels is not None:
+		lm_loss = None
+		QA_loss = None
+
+		if target_ids is not None:
+			loss_fct_lm = CrossEntropyLoss(ignore_index=self.pad_token_id)
+			lm_loss = loss_fct_lm(lm_logits.view(-1, lm_logits.size(-1)), target_ids.view(-1))
+
+		if start_positions is not None and end_positions is not None:
 			loss_fct = CrossEntropyLoss()
 			### loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
-			start_loss = loss_fct(start_logits, start_labels)
-			end_loss = loss_fct(end_logits, end_labels)
-			loss = (start_loss + end_loss) / 2
+			start_loss = loss_fct(start_logits, start_positions)
+			end_loss = loss_fct(end_logits, end_positions)
+			QA_loss = (start_loss + end_loss) / 2
+
+		if lm_loss is not None and QA_loss is not None:
+			loss = lm_loss + QA_loss
+		elif lm_loss is not None and QA_loss is None:
+			loss = lm_loss
+		elif lm_loss is None and QA_loss is not None:
+			loss = QA_loss
 
 		if not return_dict:
 			output = (logits,) + transformer_outputs[2:]
@@ -193,7 +210,12 @@ class GPT2forQA(GPT2ForTokenClassification):
 class QATrainer(Trainer):
 	def compute_loss(self, model, inputs, return_outputs=False):
 		# forward pass
-		outputs = model(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'], token_type_ids=inputs['token_type_ids'], start_labels=inputs['start_labels'], end_labels=inputs['end_labels'])
+		if "start_positions" not in inputs or "end_positions" not in inputs:
+			outputs = model(input_ids=inputs['input_ids'], target_ids=inputs['target_ids'], attention_mask=inputs['attention_mask'], token_type_ids=inputs['token_type_ids'])
+		elif "target_ids" not in inputs:
+			outputs = model(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'], token_type_ids=inputs['token_type_ids'], start_positions=inputs['start_positions'], end_positions=inputs['end_positions'])
+		else:
+			outputs = model(input_ids=inputs['input_ids'], target_ids=inputs['target_ids'], attention_mask=inputs['attention_mask'], token_type_ids=inputs['token_type_ids'], start_positions=inputs['start_positions'], end_positions=inputs['end_positions'])
 		loss = outputs.get("loss")
 		# compute custom loss (suppose one has 3 labels with different weights)
 		return (loss, outputs) if return_outputs else loss

@@ -53,6 +53,15 @@ class DataArguments:
 	decode: bool = field(
 		default=False,
 		metadata={"help": "Decode on a test dataset"})
+	only_lm: bool = field(
+		default=False,
+		metadata={"help": "Do not process QA"})
+	only_qa: bool = field(
+		default=False,
+		metadata={"help": "Do not process lm"})
+	fine_tune: bool = field(
+		default=False,
+		metadata={"help": "Turn on when fine tuning an existing model"})
 
 
 
@@ -70,14 +79,25 @@ class train_data():
 		# in one example possible giving several features when a context is long, each of those features having a
 		# context that overlaps a bit the context of the previous feature.
 		
-		# eos_id = tokenizer.eos_token_id
-		tokenized_examples = {"original_input_ids":list(),"input_ids":list(),"attention_mask":list(),"token_type_ids":list(),"start_labels":list(),"end_labels":list()}
+		eos_id = tokenizer.eos_token_id
+		tokenized_examples = {"original_input_ids":list(),"input_ids":list(),"target_ids":list(),"attention_mask":list(),"token_type_ids":list(),"start_positions":list(),"end_positions":list()}
 		
 		for example in dataset:
 			
 			tokenized_example = tokenizer(
 				example["question"],
 				example["context"],
+				max_length=max_length,
+				truncation='only_second',
+				return_overflowing_tokens=True,
+				return_offsets_mapping=True,
+				stride=doc_stride,
+				padding="max_length",
+			)
+
+			tokenized_target = tokenizer(
+				example["question"],
+				example["human_answer"],
 				max_length=max_length,
 				truncation='only_second',
 				return_overflowing_tokens=True,
@@ -93,38 +113,52 @@ class train_data():
 		
 			for i, offsets in enumerate(offset_mapping):
 				
-				sequence_ids = tokenized_example.sequence_ids(i).copy()
+				sequence_ids = tokenized_example.sequence_ids(i)
+				sequence_ids_target = tokenized_target.sequence_ids(i)
 				
 				start_index = 0
 				while sequence_ids[start_index] != 1:
 					start_index += 1
 
+				eos_index = start_index
+
 				end_index = len(sequence_ids) - 1
 				while sequence_ids[end_index] != 1:
 					end_index -= 1
+
+				target_end_index = len(sequence_ids_target) - 1
+				while sequence_ids[target_end_index] != 1:
+					target_end_index -= 1
 				
-				# input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:]
-				input_ids = tokenized_example['input_ids'][i]
-				# attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:]
-				attention_mask = tokenized_example['attention_mask'][i]
-				# sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
+				input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:]
+				target_ids = tokenized_target['input_ids'][i][:target_end_index+1] + [eos_id] + tokenized_target['input_ids'][i][target_end_index+1:]
+				# input_ids = tokenized_example['input_ids'][i]
+				attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:]
+				# attention_mask = tokenized_example['attention_mask'][i]
+				sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
 				# offsets = offsets[:eos_index] + [(-1,-1)] + offsets[eos_index:end_index + 1]
-				offsets = [None]*(start_index-1) + [(-1,-1)] + offsets[start_index:end_index+1]
+				offsets = [None]*(eos_index) + [(-1,-1)] + offsets[eos_index:end_index+1]
 				
 				
 				tokenized_examples["original_input_ids"].append(input_ids)
 				tokenized_examples["input_ids"].append([space_sharp_id if x==sharp_id else x for x in input_ids])
+				tokenized_examples["target_ids"].append(target_ids)
 				tokenized_examples["attention_mask"].append(attention_mask)
 				tokenized_examples["token_type_ids"].append([id if id is not None else 1 for id in sequence_ids])
+
+				start_index += 1
+				end_index += 1
+
+				assert eos_index == start_index-1
 				
-				# We will label impossible answers with the index of the last token of the question (start_index - 1).
+				# We will label impossible answers with the eos_index.
 
 				answer_span = example["answer_span"]
 				# If no answers are given, set the cls_index as answer.
 				if answer_span[0] == -1:
 		#             raise Exception("The answer span does not exist.")
-					tokenized_examples["start_labels"].append(start_index-1)
-					tokenized_examples["end_labels"].append(start_index-1)
+					tokenized_examples["start_positions"].append(eos_index)
+					tokenized_examples["end_positions"].append(eos_index)
 				else:
 					# Start/end character index of the answer in the text.
 					start_char = answer_span[0]
@@ -133,14 +167,14 @@ class train_data():
 					# Detect if the answer is out of the span (in which case this feature is labeled with the last token of the question (start_index - 1)).
 					if not (offsets[start_index][0] <= start_char and offsets[end_index][1] >= end_char):
 		#                 raise Exception("The answer span does not fall in the context.")
-						tokenized_examples["start_labels"].append(start_index-1)
-						tokenized_examples["end_labels"].append(start_index-1)
+						tokenized_examples["start_positions"].append(eos_index)
+						tokenized_examples["end_positions"].append(eos_index)
 					else:
 						# Otherwise move the start_index and end_index to the two ends of the answer.
 						# Note: we could go after the last offset if the answer is the last word (edge case).
 						start_token, end_token = self.char_to_token(start_char,end_char,offsets,start_index,end_index)
-						tokenized_examples["start_labels"].append(start_token)
-						tokenized_examples["end_labels"].append(end_token)
+						tokenized_examples["start_positions"].append(start_token)
+						tokenized_examples["end_positions"].append(end_token)
 
 		return Dataset.from_dict(tokenized_examples)
 
@@ -443,6 +477,8 @@ class decode_data(train_data):
 				start_indices = argsort(start_logit)[::-1][:search_size].tolist()
 				end_indices = argsort(end_logit)[::-1][:search_size].tolist()
 
+				print(start_indices)
+
 				for start_index in start_indices:
 					for end_index in end_indices:
 						# Don't consider out-of-scope answers, either because the indices are out of bounds or correspond
@@ -472,6 +508,8 @@ class decode_data(train_data):
 						if predicted_score > best_score:
 							best_score = predicted_score
 							best_answer = (start_char, end_char)
+							print(start_index)
+				print('done')
 
 				predicted_spans.append(best_answer)
 				predicted_scores.append(best_score)
@@ -706,6 +744,6 @@ if __name__ == "__main__":
 	quac_dev_path = 'dataset/quac-dev.json'
 	quac_train_prompted_path = 'dataset/quac-train-prompted.json'
 
-	train_dev_test(quac_train_prompted_path)
+	# train_dev_test(quac_train_prompted_path)
 
-	# decode_test(quac_train_path)
+	decode_test(quac_train_path)
