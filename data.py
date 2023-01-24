@@ -100,8 +100,6 @@ class train_data():
 				example["human_answer"],
 				max_length=max_length,
 				truncation='only_second',
-				return_overflowing_tokens=True,
-				return_offsets_mapping=True,
 				stride=doc_stride,
 				padding="max_length",
 			)
@@ -114,7 +112,7 @@ class train_data():
 			for i, offsets in enumerate(offset_mapping):
 				
 				sequence_ids = tokenized_example.sequence_ids(i)
-				sequence_ids_target = tokenized_target.sequence_ids(i)
+				sequence_ids_target = tokenized_target.sequence_ids(0)
 				
 				start_index = 0
 				while sequence_ids[start_index] != 1:
@@ -131,7 +129,7 @@ class train_data():
 					target_end_index -= 1
 				
 				input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:]
-				target_ids = tokenized_target['input_ids'][i][:target_end_index+1] + [eos_id] + tokenized_target['input_ids'][i][target_end_index+1:]
+				target_ids = tokenized_target['input_ids'][0][:target_end_index+1] + [eos_id] + tokenized_target['input_ids'][0][target_end_index+1:]
 				# input_ids = tokenized_example['input_ids'][i]
 				attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:]
 				# attention_mask = tokenized_example['attention_mask'][i]
@@ -140,8 +138,8 @@ class train_data():
 				offsets = [None]*(eos_index) + [(-1,-1)] + offsets[eos_index:end_index+1]
 				
 				
-				tokenized_examples["original_input_ids"].append(input_ids)
-				tokenized_examples["input_ids"].append([space_sharp_id if x==sharp_id else x for x in input_ids])
+				tokenized_examples["input_ids"].append(input_ids)
+				# tokenized_examples["input_ids"].append([space_sharp_id if x==sharp_id else x for x in input_ids])
 				tokenized_examples["target_ids"].append(target_ids)
 				tokenized_examples["attention_mask"].append(attention_mask)
 				tokenized_examples["token_type_ids"].append([id if id is not None else 1 for id in sequence_ids])
