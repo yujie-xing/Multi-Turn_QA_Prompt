@@ -180,7 +180,8 @@ class train_data():
 				max_length=1022-max_length,
 				truncation=True,
 			)
-			
+
+			target = tokenized_target['input_ids']
 
 			# The offset mappings will give us a map from token to character position in the original context. This will
 			# help us compute the start_positions and end_positions.
@@ -189,7 +190,6 @@ class train_data():
 			for i, offsets in enumerate(offset_mapping):
 				
 				sequence_ids = tokenized_example.sequence_ids(i)
-				target = tokenized_target['input_ids']
 				
 				start_index = 0
 				while sequence_ids[start_index] != 1:
@@ -210,7 +210,7 @@ class train_data():
 				attention_mask[end_index+2:end_index+3+len(target)] = [1]*(len(target)+1)
 				# attention_mask = tokenized_example['attention_mask'][i]
 				sequence_ids = sequence_ids[:eos_index] + [0] + sequence_ids[eos_index:] + [None]*(1023-max_length)
-				sequence_ids[start_index+1:end_index+2] = [0]*(end_index-start_index)
+				sequence_ids[start_index+1:end_index+2] = [0]*(end_index-start_index+1)
 				sequence_ids[end_index+2:end_index+3+len(target)] = [1]*(len(target)+1)
 				# offsets = offsets[:eos_index] + [(-1,-1)] + offsets[eos_index:end_index + 1]
 				offsets = [None]*(eos_index) + [(-1,-1)] + offsets[eos_index:end_index+1]
