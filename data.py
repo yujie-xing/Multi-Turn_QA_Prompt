@@ -36,8 +36,8 @@ class DataArguments:
 		default='gpt2',
 		metadata={"help": "The Pretrained model's name or path."})
 	max_length: Optional[int] = field(
-		default=1023,
-		metadata={"help": "The max length for question and context. Defaulted to model max length -1."})
+		default=924,
+		metadata={"help": "The max length for question and context. Defaulted to model max length -100."})
 	doc_stride: Optional[int] = field(
 		default=128,
 		metadata={"help": "The overlaping tokens for overflowing tokens. Defaulted to 128."})
@@ -159,6 +159,7 @@ class train_data():
 		# context that overlaps a bit the context of the previous feature.
 		
 		eos_id = tokenizer.eos_token_id
+		pad_id = tokenizer.pad_token_id
 		tokenized_examples = {"input_ids":list(),"target_ids":list(),"attention_mask":list(),"token_type_ids":list(),"start_positions":list(),"end_positions":list()}
 		
 		for example in dataset:
@@ -175,12 +176,9 @@ class train_data():
 			)
 
 			tokenized_target = tokenizer(
-				example["question"],
 				example["human_answer"],
-				max_length=max_length,
-				truncation='only_second',
-				stride=doc_stride,
-				padding="max_length",
+				max_length=1022-max_length,
+				truncation=True,
 			)
 			
 
@@ -191,7 +189,7 @@ class train_data():
 			for i, offsets in enumerate(offset_mapping):
 				
 				sequence_ids = tokenized_example.sequence_ids(i)
-				sequence_ids_target = tokenized_target.sequence_ids()
+				target = tokenized_target['input_ids']
 				
 				start_index = 0
 				while sequence_ids[start_index] != 1:
@@ -202,17 +200,18 @@ class train_data():
 				end_index = len(sequence_ids) - 1
 				while sequence_ids[end_index] != 1:
 					end_index -= 1
-
-				target_end_index = len(sequence_ids_target) - 1
-				while sequence_ids[target_end_index] != 1:
-					target_end_index -= 1
 				
-				input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:]
-				target_ids = tokenized_target['input_ids'][:target_end_index+1] + [eos_id] + tokenized_target['input_ids'][target_end_index+1:]
+				input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:] + [pad_id]*(1023-max_length)
+				input_ids[end_index+2:end_index+3+len(target)] = [eos_id] + target
+				target_ids = [pad_id]*len(input_ids)
+				target_ids[end_index+2:end_index+3+len(target)] = target + [eos_id]
 				# input_ids = tokenized_example['input_ids'][i]
-				attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:]
+				attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:] + [0]*(1023-max_length)
+				attention_mask[end_index+2:end_index+3+len(target)] = [1]*(len(target)+1)
 				# attention_mask = tokenized_example['attention_mask'][i]
-				sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
+				sequence_ids = sequence_ids[:eos_index] + [0] + sequence_ids[eos_index:] + [None]*(1023-max_length)
+				sequence_ids[start_index+1:end_index+2] = [0]*(end_index-start_index)
+				sequence_ids[end_index+2:end_index+3+len(target)] = [1]*(len(target)+1)
 				# offsets = offsets[:eos_index] + [(-1,-1)] + offsets[eos_index:end_index + 1]
 				offsets = [None]*(eos_index) + [(-1,-1)] + offsets[eos_index:end_index+1]
 				
@@ -653,27 +652,35 @@ class decode_data_longformer(decode_data):
 
 
 def train_dev_test(coqa_path):
-	data_processor = train_data_longformer()
+	data_processor = train_data()
 	test_data_processor = decode_data_longformer()
 	train_dataset = data_processor.load(coqa_path)
 
 	# Initialize tokenizer
-	# tokenizer = AutoTokenizer.from_pretrained('gpt2')
+	tokenizer = AutoTokenizer.from_pretrained('gpt2')
 	# tokenizer.pad_token = tokenizer.eos_token
-	# special_tokens_dict = {'pad_token': '<|paddingtokencustomized|>'}
-	# tokenizer.add_special_tokens(special_tokens_dict)
-	tokenizer = AutoTokenizer.from_pretrained("mrm8488/longformer-base-4096-finetuned-squadv2")
+	special_tokens_dict = {'pad_token': '<|pad|>'}
+	tokenizer.add_special_tokens(special_tokens_dict)
+	# tokenizer = AutoTokenizer.from_pretrained("mrm8488/longformer-base-4096-finetuned-squadv2")
 	sharp_id = tokenizer.vocab["<"]
 	space_sharp_id = tokenizer.vocab["Ġ<"]
 
 	# Tokenize dataset & prepared labels
 	# tokenized_train_dataset = data_processor.preprocess(train_dataset[:], tokenizer, 1020, 128, sharp_id, space_sharp_id)
-	tokenized_train_dataset = data_processor.preprocess(train_dataset[:1], tokenizer)
-	tokenized_test_dataset = test_data_processor.preprocess(train_dataset[:1], tokenizer, 1020, 128, sharp_id, space_sharp_id)
+	tokenized_train_dataset = data_processor.preprocess(train_dataset[:1], tokenizer, 924, 128, sharp_id, space_sharp_id)
+	# tokenized_test_dataset = test_data_processor.preprocess(train_dataset[:1], tokenizer, 1020, 128, sharp_id, space_sharp_id)
+
+	# print(tokenized_train_dataset['input_ids'])
+	# print()
+	# print(tokenized_train_dataset['target_ids'])
+	# print()
+	# print(tokenized_train_dataset['attention_mask'])
+	# print()
+	# print(tokenized_train_dataset['token_type_ids'])
 
 	num = 0
 
-	print(tokenized_train_dataset["input_ids"][num]==tokenized_test_dataset["input_ids"][num])
+	# print(tokenized_train_dataset["input_ids"][num]==tokenized_test_dataset["input_ids"][num])
 
 	print(train_dataset[num]['context'][train_dataset[num]['answer_span'][0]:train_dataset[num]['answer_span'][1]])
 
@@ -742,6 +749,6 @@ if __name__ == "__main__":
 	quac_dev_path = 'dataset/quac-dev.json'
 	quac_train_prompted_path = 'dataset/quac-train-prompted.json'
 
-	# train_dev_test(quac_train_prompted_path)
+	train_dev_test(coqa_train_prompted_path)
 
-	decode_test(quac_train_path)
+	# decode_test(quac_train_path)
