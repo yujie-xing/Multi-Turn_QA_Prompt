@@ -10,7 +10,6 @@ from GPT2forQA import *
 def my_hp_space(trial):
     return {
         "learning_rate": trial.suggest_float("learning_rate", 3e-5, 6e-5),
-        "num_train_epochs": trial.suggest_int("num_train_epochs", 5, 10),
         }
 
 #===============================

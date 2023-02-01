@@ -9,6 +9,8 @@ Question_Answering_on_SQUAD.ipynb
 *.out
 requirements
 /prompt_QA_coqa/*
+/prompt_gen
+/prompt_QA_gen/*
 /news/*
 /transformers/
 /prompt_QA_coqa_full/*
