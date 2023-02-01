@@ -29,8 +29,8 @@ except:  ## Only for test
 		mkdir("test")
 	except:
 		pass
-	dataargs = DataArguments(train_path="dataset/coqa-train-prompted.json",dev_path="dataset/coqa-dev-prompted.json",test_path=None)
-	print("Test Mode")
+	dataargs = DataArguments(train_path="dataset/coqa-train.json",dev_path="dataset/coqa-dev.json",test_path=None, instruction="Answer the question based on the given passage.", only_lm=True)
+	print("Test Mode\n\n")
 	print(args)
 	print(dataargs)
 	
@@ -40,37 +40,31 @@ except:  ## Only for test
 # Initialize data processor
 
 data_processor = train_data()
-train_dataset = data_processor.load(dataargs.train_path)
-dev_dataset = data_processor.load(dataargs.dev_path)
+
 if dataargs.only_lm:
 	train_dataset  = data_processor.data_to_dicts_coqa(dataargs.train_path)
 	dev_dataset  = data_processor.data_to_dicts_coqa(dataargs.dev_path)
 	train_dataset = [qa_dict for qa_list in train_dataset for qa_dict in qa_list]
 	dev_dataset = [qa_dict for qa_list in dev_dataset for qa_dict in qa_list]
+else:
+	train_dataset = data_processor.load(dataargs.train_path)
+	dev_dataset = data_processor.load(dataargs.dev_path)
 	
 
 # Initialize tokenizer
 tokenizer = AutoTokenizer.from_pretrained(dataargs.tokenizer_path)
-sharp_id = tokenizer.vocab["<"]
-space_sharp_id = tokenizer.vocab["Ġ<"]
-# tokenizer.pad_token = tokenizer.eos_token
+# sharp_id = tokenizer.vocab["<"]
+# space_sharp_id = tokenizer.vocab["Ġ<"]
+tokenizer.pad_token = tokenizer.eos_token
 special_tokens_dict = {'pad_token': '<|padding|>'}
 tokenizer.add_special_tokens(special_tokens_dict)
 
 # Tokenize dataset & prepared labels
-tokenized_train_dataset = data_processor.preprocess(train_dataset, tokenizer, dataargs.max_length, dataargs.doc_stride, sharp_id, space_sharp_id)
-tokenized_dev_dataset = data_processor.preprocess(dev_dataset, tokenizer, dataargs.max_length, dataargs.doc_stride, sharp_id, space_sharp_id)
+tokenized_train_dataset = data_processor.preprocess(train_dataset, tokenizer, dataargs.only_lm, dataargs.only_qa, dataargs.instruction, dataargs.max_length, dataargs.doc_stride)
+tokenized_dev_dataset = data_processor.preprocess(dev_dataset, tokenizer, dataargs.only_lm, dataargs.only_qa, dataargs.instruction, dataargs.max_length, dataargs.doc_stride)
 
-if dataargs.only_lm:
-	print("Training without QA support")
-	tokenized_train_dataset = tokenized_train_dataset.remove_columns(['start_positions','end_positions'])
-	tokenized_dev_dataset = tokenized_dev_dataset.remove_columns(['start_positions','end_positions'])
-if dataargs.only_qa:
-	print("Training QA part")
-	tokenized_train_dataset = tokenized_train_dataset.remove_columns('target_ids')
-	tokenized_dev_dataset = tokenized_dev_dataset.remove_columns('target_ids')
-else:
-	print("data tokenized")
+print(tokenized_train_dataset.features)
+print()
 
 #===============================
 # Initialize config

@@ -30,3 +30,5 @@ if dataargs.evaluate:
 	QA_model.evaluate()
 elif dataargs.decode:
 	QA_model.decode()
+elif dataargs.decode_lm:
+	QA_model.decode_lm()

@@ -166,33 +166,31 @@ class GPT2forQA(GPT2ForTokenClassification):
 
 		hidden_states = transformer_outputs[0]
 		hidden_states = self.dropout(hidden_states)
-		QA_logits = self.classifier(hidden_states)
-		lm_logits = self.lm_head(hidden_states)
-
-		### Split start and end logits. 0 for start and 1 for end
-		start_logits = QA_logits[:,:,0]
-		end_logits = QA_logits[:,:,1]
-
-		lm_loss = None
-		QA_loss = None
+		qa_logits = None
+		lm_logits = None
 
 		if target_ids is not None:
+			lm_logits = self.lm_head(hidden_states)
 			loss_fct_lm = CrossEntropyLoss(ignore_index=self.pad_token_id)
 			lm_loss = loss_fct_lm(lm_logits.view(-1, lm_logits.size(-1)), target_ids.view(-1))
 
 		if start_positions is not None and end_positions is not None:
+			qa_logits = self.classifier(hidden_states)
+			### Split start and end logits. 0 for start and 1 for end
+			start_logits = qa_logits[:,:,0]
+			end_logits = qa_logits[:,:,1]
 			loss_fct = CrossEntropyLoss()
 			### loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
 			start_loss = loss_fct(start_logits, start_positions)
 			end_loss = loss_fct(end_logits, end_positions)
-			QA_loss = (start_loss + end_loss) / 2
+			qa_loss = (start_loss + end_loss) / 2
 
-		if lm_loss is not None and QA_loss is not None:
-			loss = lm_loss + QA_loss
-		elif lm_loss is not None and QA_loss is None:
+		if qa_logits is not None and lm_logits is not None:
+			loss = (lm_loss + qa_loss) / 2
+		elif lm_logits is not None and qa_logits is None:
 			loss = lm_loss
-		elif lm_loss is None and QA_loss is not None:
-			loss = QA_loss
+		elif lm_logits is None and qa_logits is not None:
+			loss = qa_loss
 
 		if not return_dict:
 			output = (logits,) + transformer_outputs[2:]
@@ -201,7 +199,7 @@ class GPT2forQA(GPT2ForTokenClassification):
 		return TokenClassifierOutput(
 			loss=loss,
 			## logits=logits
-			logits=(start_logits,end_logits),
+			logits=(qa_logits,lm_logits),
 			hidden_states=transformer_outputs.hidden_states,
 			attentions=transformer_outputs.attentions,
 		)
@@ -251,9 +249,8 @@ class generate_QA():
 			
 		print("Output to {}.\n".format(self.output_path))
 
-		
 
-	def decode(self):
+	def decode_lm(self):
 
 		if "coqa" in self.dataargs.test_path:
 			qa_dicts = self.data_processor.data_to_dicts_coqa(self.dataargs.test_path)
@@ -287,6 +284,42 @@ class generate_QA():
 		self.write_quac_answer(answer_list)
 		print("Decoding finished!")
 
+		
+
+	def decode(self):
+
+		if "coqa" in self.dataargs.test_path:
+			qa_dicts = self.data_processor.data_to_dicts_coqa(self.dataargs.test_path)
+		elif "quac" in self.dataargs.test_path:
+			qa_dicts = self.data_processor.data_to_dicts_quac(self.dataargs.test_path)
+		else:
+			raise Exception("Not coqa nor quac.")
+
+		answer_list = list()
+
+		for qa_list in qa_dicts:
+
+			predicted_span = None
+			previous_qa_dict = None
+
+			original_context = qa_list[0]['context']
+
+			for i, qa_dict in enumerate(qa_list):
+				qa_dict = self.data_processor.add_prompt_decode(qa_dict, predicted_span, previous_qa_dict)
+				tokenized_qa_dict = self.data_processor.preprocess([qa_dict], self.tokenizer, self.dataargs.max_length, self.dataargs.doc_stride, self.sharp_id, self.space_sharp_id)
+				start_logits,end_logits,lm_logits = self.predictor.predict(tokenized_qa_dict).predictions
+				predicted_span, predicted_score = self.data_processor.postprocess([qa_dict], tokenized_qa_dict, start_logits, end_logits, self.dataargs.search_size, self.dataargs.max_answer_length)
+				predicted_span_original = self.data_processor.calc_original_span_positions(qa_dict['prompt_positions_original'],predicted_span)
+				previous_qa_dict = qa_dict
+				
+				answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "question": qa_dict['question'], "gold": qa_dict['original_answer'], "span": (predicted_span_original[0],predicted_span_original[1]), "answer": original_context[predicted_span_original[0]:predicted_span_original[1]]})
+
+#				self.write(qa_dict, predicted_span, predicted_score, predicted_span_original, original_context)
+
+		# self.write_coqa_answer(answer_list)
+		self.write_quac_answer(answer_list)
+		print("Decoding finished!")
+
 
 	def evaluate(self):   ## For evaluation of prompted test dataset.
 
@@ -296,8 +329,8 @@ class generate_QA():
 
 		# Tokenize dataset & prepared labels
 		tokenized_test_dataset = self.data_processor.preprocess(test_dataset, self.tokenizer, self.dataargs.max_length, self.dataargs.doc_stride, self.sharp_id, self.space_sharp_id)
-		start_logits, end_logits = self.predictor.predict(tokenized_test_dataset).predictions
-		predicted_spans, predicted_scores = self.data_processor.postprocess(test_dataset, tokenized_test_dataset, start_logits, end_logits, self.dataargs.search_size, self.dataargs.max_answer_length)
+		qa_logits, lm_logits = self.predictor.predict(tokenized_test_dataset).predictions
+		predicted_spans, predicted_scores, predicted_lm_answers = self.data_processor.postprocess(test_dataset, tokenized_test_dataset, qa_logits[:,:,0], qa_logits[:,:,1], lm_logits, self.dataargs.search_size, self.dataargs.max_answer_length)
 
 		predicted_spans_original = list()
 		for i, predicted_span in enumerate(predicted_spans):
@@ -305,22 +338,31 @@ class generate_QA():
 			predicted_spans_original.append(predicted_span_original)
 				
 		for i, qa_dict in enumerate(test_dataset):
-			answer_list.append({"id": qa_dict['id'], "turn_id" : qa_dict['turn_id'], "question" : qa_dict['question'], "gold" : qa_dict['original_answer'], "span" : (predicted_spans_original[i][0],predicted_spans_original[i][1]), "answer" : qa_dict['original_context'][predicted_spans_original[i][0]:predicted_spans_original[i][1]]})
+			answer_list.append({"id": qa_dict['id'], "turn_id" : qa_dict['turn_id'], "question" : qa_dict['question'], "gold" : qa_dict['original_answer'], "span" : (predicted_spans_original[i][0],predicted_spans_original[i][1]), "qa_answer" : qa_dict['original_context'][predicted_spans_original[i][0]:predicted_spans_original[i][1]], "lm_answer": self.tokenizer.decode(predicted_lm_answer[i])})
 #			self.write(qa_dict, predicted_spans[i], predicted_scores[i], predicted_spans_original[i], qa_dict['original_context'])
 		
-		# self.write_coqa_answer(answer_list)
-		self.write_quac_answer(answer_list)
+		if not self.dataargs.only_lm:
+			self.write_coqa_qa_answer(answer_list)
+			# self.write_quac_qa_answer(answer_list)
+		if not self.dataargs.only_qa:
+			self.write_coqa_lm_answer(answer_list)
+
 
 		print("Decoding finished!")
 			
 			
 			
-	def write_coqa_answer(self, answer_list):
-		with open(self.output_path,'w') as f:
+	def write_coqa_qa_answer(self, answer_list):
+		answer_list["answer"] = answre_list["qa_answer"]
+		with open(self.output_path+'.txt','w') as f:
+			json.dump(answer_list,f)
+
+	def write_coqa_lm_answer(self, answer_list):
+		with open(self.output_path+'_lm.txt','w') as f:
 			json.dump(answer_list,f)
 
 
-	def write_quac_answer(self, answer_list):
+	def write_quac_qa_answer(self, answer_list):
 
 		with open(self.output_path,'w') as f:
 			f.write("")
