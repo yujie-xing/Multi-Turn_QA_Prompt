@@ -305,7 +305,13 @@ class generate_QA():
 
 		# Handles models with and without QA support.
 
-		test_dataset = self.data_processor.load(self.dataargs.test_path)
+		if "prompt" in self.dataargs.test_path:
+			test_dataset = self.data_processor.load(self.dataargs.test_path)
+		else:
+			test_dataset = self.data_processor.data_to_dicts_coqa(self.dataargs.test_path)
+			test_dataset = [qa_dict for qa_list in test_dataset for qa_dict in qa_list]
+			if not self.model_dataargs.only_lm:
+				raise Exception("Use decode().")
 		
 		answer_list = list()
 
