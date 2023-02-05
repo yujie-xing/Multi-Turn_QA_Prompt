@@ -275,7 +275,8 @@ class generate_QA():
 			for i, qa_dict in enumerate(qa_list):
 				qa_dict = self.data_processor.add_prompt_decode(qa_dict, span, previous_qa_dict)
 				tokenized_qa_dict = self.data_processor.preprocess([qa_dict], self.tokenizer, self.model_dataargs.only_lm, self.model_dataargs.only_qa, self.model_dataargs.instruction, self.dataargs.max_length, self.dataargs.doc_stride)
-				qa_logits,lm_logits = self.predictor.predict(tokenized_qa_dict).predictions
+				with torch.no_grad():
+					qa_logits,lm_logits = self.predictor.predict(tokenized_qa_dict).predictions
 				span, score, lm_answer_start, have_span = self.data_processor.postprocess([qa_dict], tokenized_qa_dict, qa_logits, lm_logits, self.model_dataargs.only_lm, self.model_dataargs.only_qa, self.dataargs.search_size, self.dataargs.max_answer_length)
 
 				if not self.model_dataargs.only_lm:
@@ -315,7 +316,8 @@ class generate_QA():
 
 		# Tokenize dataset & prepared labels
 		tokenized_test_dataset = self.data_processor.preprocess(test_dataset, self.tokenizer, self.model_dataargs.only_lm, self.model_dataargs.only_qa, self.model_dataargs.instruction, self.dataargs.max_length, self.dataargs.doc_stride)
-		qa_logits, lm_logits = self.predictor.predict(tokenized_test_dataset).predictions
+		with torch.no_grad():
+			qa_logits, lm_logits = self.predictor.predict(tokenized_test_dataset).predictions
 		spans, scores, lm_answers_start, have_span = self.data_processor.postprocess(test_dataset, tokenized_test_dataset, qa_logits, lm_logits, self.model_dataargs.only_lm, self.model_dataargs.only_qa, self.dataargs.search_size, self.dataargs.max_answer_length)
 
 		if not self.model_dataargs.only_lm:

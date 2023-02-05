@@ -619,7 +619,8 @@ class decode_data(train_data):
 
 		for i in range(max_answer_length-1):
 			tokenized_test_dataset = self.add_lm_answer(tokenized_test_dataset, lm_answers_start)
-			_, lm_logits = predictor.predict(tokenized_test_dataset).predictions
+			with torch.no_grad():
+				_, lm_logits = predictor.predict(tokenized_test_dataset).predictions
 			lm_answers_start = self.find_lm_answer(tokenized_test_dataset, lm_logits)
 			
 			for j in range(len(lm_answers)):
