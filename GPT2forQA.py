@@ -256,6 +256,8 @@ class generate_QA():
 
 	def decode(self):
 
+		# Handles models with QA support. Please use evaluate() for models without QA support.
+
 		if "coqa" in self.dataargs.test_path:
 			qa_dicts = self.data_processor.data_to_dicts_coqa(self.dataargs.test_path)
 		elif "quac" in self.dataargs.test_path:
@@ -273,16 +275,11 @@ class generate_QA():
 			original_context = qa_list[0]['context']
 
 			for qa_dict in qa_list:
-				if not self.model_dataargs.only_lm:
-					qa_dict = self.data_processor.add_prompt_decode(qa_dict, span, previous_qa_dict)
+				qa_dict = self.data_processor.add_prompt_decode(qa_dict, span, previous_qa_dict)
 				tokenized_qa_dict = self.data_processor.preprocess([qa_dict], self.tokenizer, self.model_dataargs.only_lm, self.model_dataargs.only_qa, self.model_dataargs.instruction, self.dataargs.max_length, self.dataargs.doc_stride)
 				qa_logits,lm_logits = self.predictor.predict(tokenized_qa_dict).predictions
 				span, score, lm_answer_start, have_span = self.data_processor.postprocess([qa_dict], tokenized_qa_dict, qa_logits, lm_logits, self.model_dataargs.only_lm, self.model_dataargs.only_qa, self.dataargs.search_size, self.dataargs.max_answer_length)
-
-				if not self.model_dataargs.only_lm:
-					span_original = self.data_processor.calc_original_span_positions(qa_dict['prompt_positions_original'],span)
-				else:
-					span_original = (-1,-1)
+				span_original = self.data_processor.calc_original_span_positions(qa_dict['prompt_positions_original'],span)
 
 				if not self.model_dataargs.only_qa:
 					lm_answer = self.data_processor.postprocess_lm(self.predictor, tokenized_qa_dict, lm_answer_start, have_span, self.tokenizer.eos_token_id, self.dataargs.max_answer_length)
@@ -306,7 +303,16 @@ class generate_QA():
 
 	def evaluate(self):   ## For evaluation of prompted test dataset.
 
-		test_dataset = self.data_processor.load(self.dataargs.test_path)
+		# When test dataset is prompted: evaluate pure lm, lm with QA support, and pure QA models.
+		# When test dataset is not prompted: evaluate pure lm.
+
+		if "prompt" in self.dataargs.test_path:
+			test_dataset = self.data_processor.load(self.dataargs.test_path)
+		else:
+			test_dataset = self.data_processor.data_to_dicts_coqa(self.dataargs.test_path)
+			test_dataset = [qa_dict for qa_list in test_dataset for qa_dict in qa_list]
+			if not self.model_dataargs.only_lm:
+				raise Exception("Use decode().")
 		
 		answer_list = list()
 
