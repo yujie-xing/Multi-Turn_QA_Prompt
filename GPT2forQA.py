@@ -256,7 +256,7 @@ class generate_QA():
 
 	def decode(self):
 
-		# Handles models with QA support. Please use evaluate() for models without QA support.
+		# Handles models with QA support. Use evaluate() for models without QA support.
 
 		if "coqa" in self.dataargs.test_path:
 			qa_dicts = self.data_processor.data_to_dicts_coqa(self.dataargs.test_path)
@@ -303,16 +303,9 @@ class generate_QA():
 
 	def evaluate(self):   ## For evaluation of prompted test dataset.
 
-		# When test dataset is prompted: evaluate pure lm, lm with QA support, and pure QA models.
-		# When test dataset is not prompted: evaluate pure lm.
+		# Handles models with and without QA support.
 
-		if "prompt" in self.dataargs.test_path:
-			test_dataset = self.data_processor.load(self.dataargs.test_path)
-		else:
-			test_dataset = self.data_processor.data_to_dicts_coqa(self.dataargs.test_path)
-			test_dataset = [qa_dict for qa_list in test_dataset for qa_dict in qa_list]
-			if not self.model_dataargs.only_lm:
-				raise Exception("Use decode().")
+		test_dataset = self.data_processor.load(self.dataargs.test_path)
 		
 		answer_list = list()
 
