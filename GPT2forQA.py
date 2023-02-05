@@ -291,7 +291,7 @@ class generate_QA():
 
 				previous_qa_dict = qa_dict
 				
-				answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "question": qa_dict['question'], "gold": qa_dict['original_answer'], "span": (span_original[0],span_original[1]), "human_answer": qa_dict['human_answer'], "qa_answer": original_context[span_original[0]:span_original[1]], "lm_answer": self.tokenizer.decode(lm_answer)})
+				answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "question": qa_dict['question'], "gold": qa_dict['original_answer'], "span": (span_original[0],span_original[1]), "human": qa_dict['human_answer'], "qa_answer": original_context[span_original[0]:span_original[1]], "lm_answer": self.tokenizer.decode(lm_answer)})
 
 #				self.write(qa_dict, span, score, span_original, original_context)
 
@@ -325,7 +325,7 @@ class generate_QA():
 			else:
 				lm_answer = [self.tokenizer.pad_token_id]
 			
-			answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "question": qa_dict['question'], "gold": qa_dict['original_answer'], "span": (span_original[0],span_original[1]), "human_answer": qa_dict['human_answer'], "qa_answer": original_context[span_original[0]:span_original[1]], "lm_answer": self.tokenizer.decode(lm_answer)})
+			answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "question": qa_dict['question'], "gold": qa_dict['original_answer'], "span": (span_original[0],span_original[1]), "human": qa_dict['human_answer'], "qa_answer": qa_dict['original_context'][span_original[0]:span_original[1]], "lm_answer": self.tokenizer.decode(lm_answer)})
 
 #			self.write(qa_dict, spans[i], scores[i], spans_original[i], qa_dict['original_context'])
 		
