@@ -12,6 +12,6 @@
 module load Python/3.9.6-GCCcore-11.2.0
 module load CUDA/11.3.1
 source news/bin/activate
-python3 decode.py --evaluate --label_names=["target_ids"] --test_path "dataset/coqa-dev-prompted.json" --output_file "answers_eval_QA_gen.json" --tokenizer_path "prompt_QA_gen/tokenizer" --model_path "prompt_QA_gen" --batch_size 2 --search_size 50 --max_answer_length 64 --output_dir "output" --evaluation_strategy "epoch"
+python3 decode.py --evaluate --label_names=["target_ids"] --test_path "dataset/coqa-dev-prompted.json" --output_file "answers_eval_QA_gen.json" --tokenizer_path "prompt_QA_gen/tokenizer" --model_path "prompt_QA_gen" --search_size 50 --max_answer_length 64 --output_dir "output" --evaluation_strategy "epoch"
 
 deactivate

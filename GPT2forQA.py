@@ -272,8 +272,9 @@ class generate_QA():
 
 			original_context = qa_list[0]['context']
 
-			for i, qa_dict in enumerate(qa_list):
-				qa_dict = self.data_processor.add_prompt_decode(qa_dict, span, previous_qa_dict)
+			for qa_dict in qa_list:
+				if not self.model_dataargs.only_lm:
+					qa_dict = self.data_processor.add_prompt_decode(qa_dict, span, previous_qa_dict)
 				tokenized_qa_dict = self.data_processor.preprocess([qa_dict], self.tokenizer, self.model_dataargs.only_lm, self.model_dataargs.only_qa, self.model_dataargs.instruction, self.dataargs.max_length, self.dataargs.doc_stride)
 				qa_logits,lm_logits = self.predictor.predict(tokenized_qa_dict).predictions
 				span, score, lm_answer_start, have_span = self.data_processor.postprocess([qa_dict], tokenized_qa_dict, qa_logits, lm_logits, self.model_dataargs.only_lm, self.model_dataargs.only_qa, self.dataargs.search_size, self.dataargs.max_answer_length)
@@ -305,34 +306,27 @@ class generate_QA():
 
 	def evaluate(self):   ## For evaluation of prompted test dataset.
 
-		if "prompt" in self.dataargs.test_path:
-			test_dataset = self.data_processor.load(self.dataargs.test_path)
-		else:
-			test_dataset = self.data_processor.data_to_dicts_coqa(self.dataargs.test_path)
-			test_dataset = [qa_dict for qa_list in test_dataset for qa_dict in qa_list]
+		test_dataset = self.data_processor.load(self.dataargs.test_path)
 		
 		answer_list = list()
 
-		# Tokenize dataset & prepared labels
-		tokenized_test_dataset = self.data_processor.preprocess(test_dataset, self.tokenizer, self.model_dataargs.only_lm, self.model_dataargs.only_qa, self.model_dataargs.instruction, self.dataargs.max_length, self.dataargs.doc_stride)
-		qa_logits, lm_logits = self.predictor.predict(tokenized_test_dataset).predictions
-		spans, scores, lm_answers_start, have_span = self.data_processor.postprocess(test_dataset, tokenized_test_dataset, qa_logits, lm_logits, self.model_dataargs.only_lm, self.model_dataargs.only_qa, self.dataargs.search_size, self.dataargs.max_answer_length)
+		for qa_dict in test_dataset:
+			tokenized_qa_dict = self.data_processor.preprocess([qa_dict], self.tokenizer, self.model_dataargs.only_lm, self.model_dataargs.only_qa, self.model_dataargs.instruction, self.dataargs.max_length, self.dataargs.doc_stride)
+			qa_logits,lm_logits = self.predictor.predict(tokenized_qa_dict).predictions
+			span, score, lm_answer_start, have_span = self.data_processor.postprocess([qa_dict], tokenized_qa_dict, qa_logits, lm_logits, self.model_dataargs.only_lm, self.model_dataargs.only_qa, self.dataargs.search_size, self.dataargs.max_answer_length)
 
-		if not self.model_dataargs.only_lm:
-			spans_original = list()
-			for i, span in enumerate(spans):
-				span_original = self.data_processor.calc_original_span_positions(test_dataset[i]['prompt_positions_original'],span)
-				spans_original.append(span_original)
-		else:
-			spans_original = [(-1,-1)]*len(spans)
+			if not self.model_dataargs.only_lm:
+				span_original = self.data_processor.calc_original_span_positions(qa_dict['prompt_positions_original'],span)
+			else:
+				span_original = (-1,-1)
 
-		if not self.model_dataargs.only_qa:
-			lm_answers = self.data_processor.postprocess_lm(self.predictor, tokenized_test_dataset, lm_answers_start, have_span, self.tokenizer.eos_token_id, self.dataargs.max_answer_length)
-		else:
-			lm_answers = [[self.tokenizer.pad_token_id]]*len(lm_answers_start)
-				
-		for i, qa_dict in enumerate(test_dataset):
-			answer_list.append({"id": qa_dict['id'], "turn_id" : qa_dict['turn_id'], "question" : qa_dict['question'], "gold" : qa_dict['original_answer'], "span" : (spans_original[i][0],spans_original[i][1]), "human": qa_dict['human_answer'], "qa_answer" : qa_dict['original_context'][spans_original[i][0]:spans_original[i][1]], "lm_answer": self.tokenizer.decode(lm_answers[i])})
+			if not self.model_dataargs.only_qa:
+				lm_answer = self.data_processor.postprocess_lm(self.predictor, tokenized_qa_dict, lm_answer_start, have_span, self.tokenizer.eos_token_id, self.dataargs.max_answer_length)
+			else:
+				lm_answer = [self.tokenizer.pad_token_id]
+			
+			answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "question": qa_dict['question'], "gold": qa_dict['original_answer'], "span": (span_original[0],span_original[1]), "human_answer": qa_dict['human_answer'], "qa_answer": original_context[span_original[0]:span_original[1]], "lm_answer": self.tokenizer.decode(lm_answer)})
+
 #			self.write(qa_dict, spans[i], scores[i], spans_original[i], qa_dict['original_context'])
 		
 		if not self.model_dataargs.only_lm:
