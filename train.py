@@ -29,7 +29,7 @@ except:  ## Only for test
 		mkdir("test")
 	except:
 		pass
-	dataargs = DataArguments(train_path="dataset/coqa-train.json",dev_path="dataset/coqa-dev.json",test_path=None, instruction="Answer the question based on the given passage.", only_lm=True)
+	dataargs = DataArguments(train_path="dataset/coqa-train-prompted.json",dev_path="dataset/coqa-dev-prompted.json",test_path=None, instruction="Answer the question based on the given passage.", only_lm=True)
 	print("Test Mode\n\n")
 	print(args)
 	print(dataargs)
@@ -41,14 +41,14 @@ except:  ## Only for test
 
 data_processor = train_data()
 
-if dataargs.only_lm:
+if "prompt" in dataargs.train_path:
+	train_dataset = data_processor.load(dataargs.train_path)[:2]
+	dev_dataset = data_processor.load(dataargs.dev_path)[:2]
+else:
 	train_dataset  = data_processor.data_to_dicts_coqa(dataargs.train_path)
 	dev_dataset  = data_processor.data_to_dicts_coqa(dataargs.dev_path)
 	train_dataset = [qa_dict for qa_list in train_dataset for qa_dict in qa_list]
 	dev_dataset = [qa_dict for qa_list in dev_dataset for qa_dict in qa_list]
-else:
-	train_dataset = data_processor.load(dataargs.train_path)
-	dev_dataset = data_processor.load(dataargs.dev_path)
 	
 
 # Initialize tokenizer

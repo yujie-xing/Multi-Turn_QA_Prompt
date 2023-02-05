@@ -12,12 +12,12 @@ try:
 	print(dataargs)
 except:  ## Only for test
 	print("\n======================\n")
-	args = TrainingArguments(output_dir="test_output")
+	args = TrainingArguments(output_dir="test_output", label_names=["target_ids"])
 	try:
 		mkdir("test_output")
 	except:
 		pass
-	dataargs = DataArguments(test_path='dataset/coqa-dev-prompted.json', tokenizer_path='test/tokenizer', model_path='test')
+	dataargs = DataArguments(test_path='dataset/coqa-dev.json', tokenizer_path='prompt_QA_gen/tokenizer', model_path='prompt_QA_gen', max_answer_length = 10, decode=True)
 	print("Test Mode")
 	print(args)
 	print(dataargs)
@@ -30,5 +30,3 @@ if dataargs.evaluate:
 	QA_model.evaluate()
 elif dataargs.decode:
 	QA_model.decode()
-elif dataargs.decode_lm:
-	QA_model.decode_lm()

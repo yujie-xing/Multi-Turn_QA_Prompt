@@ -10,7 +10,7 @@ from add_prompt import *
 @dataclass
 class DataArguments:
 	"""
-	Arguments pertaining to what data we are going to input our model for training and eval.
+	Extra information.
 	"""
 
 	train_path: str = field(
@@ -35,6 +35,9 @@ class DataArguments:
 	model_path: str = field(
 		default='gpt2',
 		metadata={"help": "The Pretrained model's name or path."})
+	dataargs_file: str = field(
+		default='dataargs.pkl',
+		metadata={"help": "The trained model's dataargs file name."})
 	max_length: Optional[int] = field(
 		default=924,
 		metadata={"help": "The max length for question and context. Defaulted to model max length -100 when using only_lm mode. Please change it to 1023 when using only_qa mode."})
@@ -45,7 +48,7 @@ class DataArguments:
 		default=20,
 		metadata={"help": "The size of searching for start and end labels."})
 	max_answer_length: Optional[int] = field(
-		default=None,
+		default=1024,
 		metadata={"help": "The max length for the answer."})
 	evaluate: bool = field(
 		default=False,
@@ -53,9 +56,6 @@ class DataArguments:
 	decode: bool = field(
 		default=False,
 		metadata={"help": "Decode on a test dataset"})
-	decode_lm: bool = field(
-		default=False,
-		metadata={"help": "Decode on a test dataset with only language model function"})
 	only_lm: bool = field(
 		default=False,
 		metadata={"help": "Do not process QA"})
@@ -224,25 +224,28 @@ class train_data():
 				end_index = len(sequence_ids) - 1
 				while sequence_ids[end_index] != 1:
 					end_index -= 1
+
+				question_context_length = end_index + 1
 				
-				input_ids = instruct + tokenized_example['input_ids'][i][:start_index] + context_prompt + tokenized_example['input_ids'][i][start_index:] + [pad_id]*(1024-max_length-len(instruct+context_prompt))
-				attention_mask = [1]*len(instruct) + tokenized_example['attention_mask'][i][:start_index] + [1]*len(context_prompt) + tokenized_example['attention_mask'][i][start_index:] + [0]*(1024-max_length-len(instruct+context_prompt))
-				sequence_ids = [0]*len(instruct) + sequence_ids[:start_index] + [1]*len(context_prompt) + sequence_ids[start_index:] + [None]*(1024-max_length-len(instruct+context_prompt))
+				input_ids = instruct + tokenized_example['input_ids'][i][:start_index] + context_prompt + tokenized_example['input_ids'][i][start_index:end_index+1] + target_prompt + [pad_id]*(max_length-question_context_length) + [pad_id]*(1024-max_length-len(instruct+context_prompt+target_prompt))
+				attention_mask = [1]*len(instruct) + tokenized_example['attention_mask'][i][:start_index] + [1]*len(context_prompt) + tokenized_example['attention_mask'][i][start_index:end_index+1] + [1]*len(target_prompt) + [0]*(max_length-question_context_length) + [0]*(1024-max_length-len(instruct+context_prompt+target_prompt))
+				sequence_ids = [0]*len(instruct) + sequence_ids[:start_index] + [1]*len(context_prompt) + sequence_ids[start_index:end_index+1] + [1]*len(target_prompt) + [None]*(max_length-question_context_length) + [None]*(1024-max_length-len(instruct+context_prompt+target_prompt))
 				offsets = [None]*(len(instruct)) + [None]*(start_index) + [None]*(len(context_prompt)-1) + [(-1,-1)] + offsets[start_index:end_index+1]
 
 				start_index += len(instruct+context_prompt)
-				soa_index = start_index - 1
+				null_index = start_index - 1
 				end_index += len(instruct+context_prompt)
 
 				if not only_qa:
-					input_ids[end_index+1 : end_index+1+len(target_prompt+target)] = target_prompt + target
+					input_ids[end_index+1+len(target_prompt) : end_index+1+len(target_prompt+target)] = target
 					target_ids = [pad_id]*len(input_ids)
-					target_ids[end_index+1 : end_index+1+len(target_prompt+target)] = [pad_id]*(len(target_prompt)-1) + target + [eos_id]
-					attention_mask[end_index+1 : end_index+1+len(target_prompt+target)] = [1]*(len(target_prompt+target))
+					target_ids[end_index+len(target_prompt) : end_index+1+len(target_prompt+target)] = target + [eos_id]
+					attention_mask[end_index+1+len(target_prompt) : end_index+1+len(target_prompt+target)] = [1]*len(target)
 					sequence_ids[start_index-len(context_prompt):end_index+1] = [0]*(end_index-start_index+1+len(context_prompt))
-					sequence_ids[end_index+1:end_index+1+len(target_prompt+target)] = [1]*(len(target_prompt+target))
+					sequence_ids[end_index+1+len(target_prompt):end_index+1+len(target_prompt+target)] = [1]*len(target)
 				
-				
+				assert null_index == offsets.index((-1,-1))
+
 				tokenized_examples["input_ids"].append(input_ids)
 				# tokenized_examples["input_ids"].append([space_sharp_id if x==sharp_id else x for x in input_ids])
 				if not only_qa:
@@ -250,17 +253,16 @@ class train_data():
 				tokenized_examples["attention_mask"].append(attention_mask)
 				tokenized_examples["token_type_ids"].append([id if id is not None else 1 for id in sequence_ids])
 
-				assert soa_index == offsets.index((-1,-1))
 				
-				# We will label impossible answers with the soa_index.
+				# We will label impossible answers with the null_index.
 
 				if not only_lm:
 					answer_span = example["answer_span"]
 					# If no answers are given, set the cls_index as answer.
 					if answer_span[0] == -1:
 			#             raise Exception("The answer span does not exist.")
-						tokenized_examples["start_positions"].append(soa_index)
-						tokenized_examples["end_positions"].append(soa_index)
+						tokenized_examples["start_positions"].append(null_index)
+						tokenized_examples["end_positions"].append(null_index)
 					else:
 						# Start/end character index of the answer in the text.
 						start_char = answer_span[0]
@@ -269,8 +271,8 @@ class train_data():
 						# Detect if the answer is out of the span (in which case this feature is labeled with the last token of the question (start_index - 1)).
 						if not (offsets[start_index][0] <= start_char and offsets[end_index][1] >= end_char):
 			#                 raise Exception("The answer span does not fall in the context.")
-							tokenized_examples["start_positions"].append(soa_index)
-							tokenized_examples["end_positions"].append(soa_index)
+							tokenized_examples["start_positions"].append(null_index)
+							tokenized_examples["end_positions"].append(null_index)
 						else:
 							# Otherwise move the start_index and end_index to the two ends of the answer.
 							# Note: we could go after the last offset if the answer is the last word (edge case).
@@ -389,14 +391,28 @@ class decode_data(train_data):
 		return new_prompt_positions
 
 
-	def preprocess(self, dataset, tokenizer, max_length, doc_stride, sharp_id, space_sharp_id) -> Dataset:
+	def preprocess(self, dataset, tokenizer, only_lm, only_qa, instruction, max_length, doc_stride) -> Dataset:
 
 		# Tokenize our examples with truncation and padding, but keep the overflows using a stride. This results
 		# in one example possible giving several features when a context is long, each of those features having a
 		# context that overlaps a bit the context of the previous feature.
 		
-		# eos_id = tokenizer.eos_token_id
-		tokenized_examples = {"input_ids":list(),"attention_mask":list(),"token_type_ids":list(),"ids":list(),"turn_ids":list(),"offset_mappings":list(), "span_location":list()}
+		eos_id = tokenizer.eos_token_id
+		pad_id = tokenizer.pad_token_id
+
+		if instruction != "":
+			instruct = tokenizer(["[Instruction]:\n", instruction, "\n[Question]:\n"])["input_ids"]
+			instruct = [id for ids in instruct for id in ids ]
+			context_prompt = tokenizer("\n[Passage]:\n")["input_ids"]
+			target_prompt = tokenizer("\n[Answer]:\n")["input_ids"]
+			max_length -= len(instruct)
+		else:
+			context_prompt = [eos_id]
+			target_prompt = [eos_id]
+			instruct = []
+
+		tokenized_examples = {"input_ids":list(),"attention_mask":list(),"token_type_ids":list(),"ids":list(),"turn_ids":list(),"offset_mappings":list()}
+		
 		
 		for example in dataset:
 			
@@ -414,13 +430,12 @@ class decode_data(train_data):
 			# The offset mappings will give us a map from token to character position in the original context. This will
 			# help us compute the start_positions and end_positions.
 			offset_mapping = tokenized_example.pop("offset_mapping")
-			span_location = 0
 
 			for i, offsets in enumerate(offset_mapping):
 
 				tokenized_examples["ids"].append(example["id"])
 				tokenized_examples["turn_ids"].append(example["turn_id"])
-				
+
 				sequence_ids = tokenized_example.sequence_ids(i)
 				
 				start_index = 0
@@ -430,27 +445,34 @@ class decode_data(train_data):
 				end_index = len(sequence_ids) - 1
 				while sequence_ids[end_index] != 1:
 					end_index -= 1
-					
-				# input_ids = tokenized_example['input_ids'][i][:eos_index] + [eos_id] + tokenized_example['input_ids'][i][eos_index:]
-				input_ids = tokenized_example['input_ids'][i]
-				# attention_mask = tokenized_example['attention_mask'][i][:eos_index] + [1] + tokenized_example['attention_mask'][i][eos_index:]
-				attention_mask = tokenized_example['attention_mask'][i]
-				# sequence_ids = sequence_ids[:eos_index] + [1] + sequence_ids[eos_index:]
-				# offsets = [None]*eos_index + [(-1,-1)] + offsets[eos_index:end_index+1]
-				offsets = [None]*(start_index-1) + [(-1,-1)] + offsets[start_index:end_index+1]
+
+				question_context_length = end_index + 1
 				
-				
+				input_ids = instruct + tokenized_example['input_ids'][i][:start_index] + context_prompt + tokenized_example['input_ids'][i][start_index:end_index+1] + target_prompt + [pad_id]*(max_length-question_context_length) + [pad_id]*(1024-max_length-len(instruct+context_prompt+target_prompt))
+				attention_mask = [1]*len(instruct) + tokenized_example['attention_mask'][i][:start_index] + [1]*len(context_prompt) + tokenized_example['attention_mask'][i][start_index:end_index+1] + [1]*len(target_prompt) + [0]*(max_length-question_context_length) + [0]*(1024-max_length-len(instruct+context_prompt+target_prompt))
+				sequence_ids = [0]*len(instruct) + sequence_ids[:start_index] + [1]*len(context_prompt) + sequence_ids[start_index:end_index+1] + [1]*len(target_prompt) + [None]*(max_length-question_context_length) + [None]*(1024-max_length-len(instruct+context_prompt+target_prompt))
+				offsets = [None]*(len(instruct)) + [None]*(start_index) + [None]*(len(context_prompt)-1) + [(-1,-1)] + offsets[start_index:end_index+1]
+
+				start_index += len(instruct+context_prompt)
+				null_index = start_index - 1
+				end_index += len(instruct+context_prompt)
+
+				if not only_qa:
+					sequence_ids[start_index-len(context_prompt):end_index+1] = [0]*(end_index-start_index+1+len(context_prompt))
+
+				assert null_index == offsets.index((-1,-1))
+
 				tokenized_examples["input_ids"].append(input_ids)
+				# tokenized_examples["input_ids"].append([space_sharp_id if x==sharp_id else x for x in input_ids])
 				tokenized_examples["attention_mask"].append(attention_mask)
 				tokenized_examples["token_type_ids"].append([id if id is not None else 1 for id in sequence_ids])
 				tokenized_examples["offset_mappings"].append(offsets)
 
-			for offsets in offset_mapping:
-				tokenized_example["span_location"].append(span_location)   # This is for the lm part
 
 		return Dataset.from_dict(tokenized_examples)
 
-	def postprocess(self, dataset, tokenized_dataset, start_logits, end_logits, lm_logits, search_size = 20, max_answer_length = None):
+
+	def postprocess(self, dataset, tokenized_dataset, qa_logits, lm_logits, only_lm, only_qa, search_size = 20, max_answer_length = 1024):
 
 		# Build a map example to its corresponding features.
 		dataset_id_to_index = {qa_dict['id']+str(qa_dict['turn_id']): i for i, qa_dict in enumerate(dataset)}
@@ -461,7 +483,8 @@ class decode_data(train_data):
 		# The dictionaries we have to fill.
 		spans = list()
 		scores = list()
-		lm_answers = list()
+		lm_answers_start = list()
+		have_span = list()
 
 		# Let's loop over all the examples!
 		for dataset_index, qa_dict in enumerate(dataset):
@@ -472,42 +495,40 @@ class decode_data(train_data):
 			predicted_spans = []
 			predicted_scores = []
 			predicted_lm_answers = []
-			prompt_chars = list()
 
-			prompt_positions = qa_dict['prompt_positions']
-			for prompt in prompt_positions:
-				if prompt[2] == 'start':
-					for prompt_char in range(prompt[0],prompt[1]):
-						prompt_chars.append(prompt_char)
-				elif prompt[2] == 'end':
-					for prompt_char in range(prompt[0],prompt[1]):
-						prompt_chars.append(prompt_char)
+			if not only_lm:
+				prompt_chars = list()
+
+				prompt_positions = qa_dict['prompt_positions']
+				for prompt in prompt_positions:
+					if prompt[2] == 'start':
+						for prompt_char in range(prompt[0],prompt[1]):
+							prompt_chars.append(prompt_char)
+					elif prompt[2] == 'end':
+						for prompt_char in range(prompt[0],prompt[1]):
+							prompt_chars.append(prompt_char)
 
 			# Looping through all the features associated to the current example.
 			for tokenized_index in tokenized_indices:
-				# We grab the predictions of the model for this feature.
 				
-				# This is what will allow us to map the positions in our logits to span of texts in the original
-				# context.
-				offset_mapping = tokenized_dataset[tokenized_index]["offset_mappings"]
+				if not only_lm:
 
+					# This is what will allow us to map the positions in our logits to span of texts in the original
+					# context.
+					offset_mapping = tokenized_dataset[tokenized_index]["offset_mappings"]
 
-				# Go through all possibilities for the `n_best_size` greater start and end logits.
-				if start_logits is not None and end_logits is not None:
-					start_logit = start_logits[tokenized_index]
-					end_logit = end_logits[tokenized_index]
+					start_logit = qa_logits[:,:,0][tokenized_index]
+					end_logit = qa_logits[:,:,1][tokenized_index]
 
 					start_indices = argsort(start_logit)[::-1][:search_size].tolist()
 					end_indices = argsort(end_logit)[::-1][:search_size].tolist()
 
 					# Update minimum null prediction.
 					null_index = offset_mapping.index([-1,-1])
-					assert null_index == 0  # for longformer
 					null_score = start_logit[null_index] + end_logit[null_index]
 
 					best_score = null_score
 					best_answer = (-1,-1)
-
 
 					for start_index in start_indices:
 						for end_index in end_indices:
@@ -521,9 +542,8 @@ class decode_data(train_data):
 							):
 								continue
 							# Don't consider answers with a length that is either < 0 or > max_answer_length.
-							if max_answer_length is not None:
-								if end_index - start_index + 1 > max_answer_length:
-									continue
+							if end_index - start_index + 1 > max_answer_length:
+								continue
 
 							start_char = offset_mapping[start_index][0]
 							end_char = offset_mapping[end_index][1]
@@ -538,23 +558,20 @@ class decode_data(train_data):
 							if predicted_score > best_score:
 								best_score = predicted_score
 								best_answer = (start_char, end_char)
-								print(start_index)
 
 					predicted_spans.append(best_answer)
 					predicted_scores.append(best_score)
 
 
-
-				if lm_logits is not None:
-					end_index = tokenizer.eos_token_ids
-					lm_logits = lm_logits[tokenized_index]
-					lm_answer = argmax(lm_logits,1).to_list()
-					predicted_lm_answers.append(lm_answer)
-			
+				if not only_qa:
+					soa_index = tokenized_dataset[tokenized_index]["attention_mask"].index(0) - 1
+					lm_logit = lm_logits[tokenized_index][soa_index,:]
+					predicted_lm_answer = argmax(lm_logit)
+					predicted_lm_answers.append(predicted_lm_answer)
 
 			span = None
 			score = None
-			lm_answer = None
+			have_span_index = tokenized_indices[0]
 
 			if len(predicted_spans) == 1:
 				span = predicted_spans[0]
@@ -568,19 +585,82 @@ class decode_data(train_data):
 					if predicted_spans[score_index] != (-1,-1):
 						span = predicted_spans[score_index]
 						score = predicted_scores[score_index]
+						have_span_index = tokenized_indices[score_index]
+
+			lm_answer_start = None
+
 			if len(predicted_lm_answers) == 1:
-				lm_answer = predicted_lm_answers[0]
+				lm_answer_start = predicted_lm_answers[0]
 			elif len(predicted_lm_answers) > 1:
-				lm_answer = predicted_lm_answers[qa_dict["span_location"]]
+				lm_answer_start = predicted_lm_answers[tokenized_indices.index(have_span_index)]
 
 			if len(dataset) == 1:
-				return span, score, lm_answer
+				return span, score, [lm_answer_start], [have_span_index]
 			else:
 				spans.append(span)
 				scores.append(score)
-				lm_answers.append(lm_answer)
+				lm_answers_start.append(lm_answer_start)
+				have_span.append(have_span_index)
+			print(have_span)
 
-		return spans, scores, lm_answers
+		return spans, scores, lm_answers_start, have_span
+
+
+
+	def postprocess_lm(self, predictor, tokenized_test_dataset, lm_answers_start, have_span, end_index, max_answer_length):
+
+		# Remove slices that do not contain span.
+		tokenized_test_dataset = tokenized_test_dataset.select(have_span)
+
+		assert len(lm_answers_start) == len(tokenized_test_dataset)
+
+		lm_answers = [[lm_answer_start] for lm_answer_start in lm_answers_start]
+		end_flags = [0]*len(lm_answers)
+
+		for i in range(max_answer_length-1):
+			tokenized_test_dataset = self.add_lm_answer(tokenized_test_dataset, lm_answers_start)
+			_, lm_logits = predictor.predict(tokenized_test_dataset).predictions
+			lm_answers_start = self.find_lm_answer(tokenized_test_dataset, lm_logits)
+			
+			for j in range(len(lm_answers)):
+				if lm_answers_start[j] == end_index:
+					end_flags[j] = 1
+				if end_flags[j] != 1:
+					lm_answers[j].append(lm_answers_start[j])
+
+			if 0 not in end_flags:
+				break
+
+		if len(tokenized_test_dataset) == 1:
+			return lm_answers[0]
+		return lm_answers
+		
+
+	def add_lm_answer(self, tokenized_test_dataset, lm_answers_start):
+
+		updated_test_dataset = {key: tokenized_test_dataset[key] for key in tokenized_test_dataset.features}
+
+		for i in range(len(lm_answers_start)):
+			lm_answer_start = lm_answers_start[i]
+			soa_index = tokenized_test_dataset[i]['attention_mask'].index(0)
+			updated_test_dataset['input_ids'][i][soa_index] = lm_answer_start
+			updated_test_dataset['attention_mask'][i][soa_index] = 1
+
+		return Dataset.from_dict(updated_test_dataset)
+
+	def find_lm_answer(self, tokenized_test_dataset, lm_logits):
+
+		lm_answers_start = list()
+
+		for i in range(len(tokenized_test_dataset)):
+			soa_index = tokenized_test_dataset[i]["attention_mask"].index(0) - 1
+			lm_logit = lm_logits[i][soa_index,:]
+			lm_answer_start = argmax(lm_logit)
+			lm_answers_start.append(lm_answer_start)
+
+		return lm_answers_start
+
+
 
 
 class train_data_longformer(train_data):
@@ -717,7 +797,7 @@ def train_dev_test(coqa_path):
 
 	# Tokenize dataset & prepared labels
 	instruction = "Answer the question based on the given passage."
-	tokenized_train_dataset = data_processor.preprocess(train_dataset[:], tokenizer, False, False, instruction, 924, 128)
+	tokenized_train_dataset = data_processor.preprocess(train_dataset[:2], tokenizer, True, False, instruction, 924, 128)
 	# tokenized_test_dataset = test_data_processor.preprocess(train_dataset[:1], tokenizer, 1020, 128, sharp_id)
 
 	# print(tokenized_train_dataset['input_ids'])
@@ -732,19 +812,19 @@ def train_dev_test(coqa_path):
 
 	# print(tokenized_train_dataset["input_ids"][num]==tokenized_test_dataset["input_ids"][num])
 
-	# print(tokenizer(["[Instruction]:\n", instruction, "\n[Question]:\n"])['input_ids'])
-	# print(tokenizer("\n[Passage]:\n")['input_ids'])
-	# print(tokenizer("\n[Answer]:\n")['input_ids'])
-	# print("\ninput_ids: \n")
-	# print(tokenized_train_dataset['input_ids'])
-	# print(tokenized_train_dataset['target_ids'])
-	# print(tokenized_train_dataset['attention_mask'])
-	# print(tokenized_train_dataset['token_type_ids'])
+	print(tokenizer(["[Instruction]:\n", instruction, "\n[Question]:\n"])['input_ids'])
+	print(tokenizer("\n[Passage]:\n")['input_ids'])
+	print(tokenizer("\n[Answer]:\n")['input_ids'])
+	print("\ninput_ids: \n")
+	print(tokenized_train_dataset['input_ids'])
+	print(tokenized_train_dataset['target_ids'])
+	print(tokenized_train_dataset['attention_mask'])
+	print(tokenized_train_dataset['token_type_ids'])
 
-	# print(len(tokenized_train_dataset['input_ids'][num]))
-	# print(len(tokenized_train_dataset['target_ids'][num]))
-	# print(len(tokenized_train_dataset['attention_mask'][num]))
-	# print(len(tokenized_train_dataset['token_type_ids'][num]))
+	print(len(tokenized_train_dataset['input_ids'][num]))
+	print(len(tokenized_train_dataset['target_ids'][num]))
+	print(len(tokenized_train_dataset['attention_mask'][num]))
+	print(len(tokenized_train_dataset['token_type_ids'][num]))
 
 	print(train_dataset[num]['context'][train_dataset[num]['answer_span'][0]:train_dataset[num]['answer_span'][1]])
 	print(tokenizer.decode(tokenized_train_dataset[num]['input_ids'][tokenized_train_dataset[num]['start_positions']:tokenized_train_dataset[num]['end_positions']+1]))
@@ -752,49 +832,49 @@ def train_dev_test(coqa_path):
 
 
 
-def decode_test(quac_path):
+# def decode_test(quac_path):
 
-	data = decode_data_longformer()
+# 	data = decode_data_longformer()
 
-	tokenizer = AutoTokenizer.from_pretrained("mrm8488/longformer-base-4096-finetuned-squadv2")
-	# tokenizer = AutoTokenizer.from_pretrained('gpt2')
-	# tokenizer.pad_token = tokenizer.eos_token
-	# special_tokens_dict = {'pad_token': '<|paddingtokencustomized|>'}
-	# tokenizer.add_special_tokens(special_tokens_dict)
-	sharp_id = tokenizer.vocab["<"]
-	space_sharp_id = tokenizer.vocab["Ġ<"]
+# 	tokenizer = AutoTokenizer.from_pretrained("mrm8488/longformer-base-4096-finetuned-squadv2")
+# 	# tokenizer = AutoTokenizer.from_pretrained('gpt2')
+# 	# tokenizer.pad_token = tokenizer.eos_token
+# 	# special_tokens_dict = {'pad_token': '<|paddingtokencustomized|>'}
+# 	# tokenizer.add_special_tokens(special_tokens_dict)
+# 	sharp_id = tokenizer.vocab["<"]
+# 	space_sharp_id = tokenizer.vocab["Ġ<"]
 
-	qa_dicts = data.data_to_dicts_quac(quac_path)
+# 	qa_dicts = data.data_to_dicts_quac(quac_path)
 
-	qa_list = qa_dicts[2409]
-	print(len(qa_list))
+# 	qa_list = qa_dicts[2409]
+# 	print(len(qa_list))
 
-	qa_dict = qa_list[0]
-	previous_qa_dict = None
-	predicted_span = None
-	original_context = qa_dict['context']
-	print(qa_dict)
-	print()
+# 	qa_dict = qa_list[0]
+# 	previous_qa_dict = None
+# 	predicted_span = None
+# 	original_context = qa_dict['context']
+# 	print(qa_dict)
+# 	print()
 	
-	for i, qa_dict in enumerate(qa_list):
-		print(qa_dict['turn_id'])
-		qa_dict = data.add_prompt_decode(qa_dict, predicted_span, previous_qa_dict)
+# 	for i, qa_dict in enumerate(qa_list):
+# 		print(qa_dict['turn_id'])
+# 		qa_dict = data.add_prompt_decode(qa_dict, predicted_span, previous_qa_dict)
 
-		tokenized_qa_dict = data.preprocess([qa_dict], tokenizer, 1020, 128, sharp_id, space_sharp_id)
+# 		tokenized_qa_dict = data.preprocess([qa_dict], tokenizer, 1020, 128, sharp_id, space_sharp_id)
 
-		span = qa_dict['answer_span']  # simulating predicted span
-		original_span = data.calc_original_span_positions(qa_dict['prompt_positions_original'],span)
-		prompt_positions = qa_dict['prompt_positions']
-		print(qa_dict['original_answer'])
-		print(original_context[original_span[0]:original_span[1]])
-		print(qa_dict['context'][span[0]:span[1]])
-		print(span)
-		# print(qa_dict['context'])
-		for prompt in prompt_positions:
-			print(qa_dict['context'][prompt[0]:prompt[1]])
-		print()
-		previous_qa_dict = qa_dict
-		predicted_span = previous_qa_dict['answer_span']
+# 		span = qa_dict['answer_span']  # simulating predicted span
+# 		original_span = data.calc_original_span_positions(qa_dict['prompt_positions_original'],span)
+# 		prompt_positions = qa_dict['prompt_positions']
+# 		print(qa_dict['original_answer'])
+# 		print(original_context[original_span[0]:original_span[1]])
+# 		print(qa_dict['context'][span[0]:span[1]])
+# 		print(span)
+# 		# print(qa_dict['context'])
+# 		for prompt in prompt_positions:
+# 			print(qa_dict['context'][prompt[0]:prompt[1]])
+# 		print()
+# 		previous_qa_dict = qa_dict
+# 		predicted_span = previous_qa_dict['answer_span']
 
 
 
