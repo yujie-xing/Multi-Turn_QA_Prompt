@@ -305,7 +305,7 @@ class generate_QA():
 
 	def evaluate(self):   ## For evaluation of prompted test dataset.
 
-		if "prompt" in test_path:
+		if "prompt" in self.dataargs.test_path:
 			test_dataset = self.data_processor.load(self.dataargs.test_path)
 		else:
 			test_dataset = self.data_processor.data_to_dicts_coqa(self.dataargs.test_path)

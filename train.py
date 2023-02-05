@@ -42,8 +42,8 @@ except:  ## Only for test
 data_processor = train_data()
 
 if "prompt" in dataargs.train_path:
-	train_dataset = data_processor.load(dataargs.train_path)[:2]
-	dev_dataset = data_processor.load(dataargs.dev_path)[:2]
+	train_dataset = data_processor.load(dataargs.train_path)
+	dev_dataset = data_processor.load(dataargs.dev_path)
 else:
 	train_dataset  = data_processor.data_to_dicts_coqa(dataargs.train_path)
 	dev_dataset  = data_processor.data_to_dicts_coqa(dataargs.dev_path)
