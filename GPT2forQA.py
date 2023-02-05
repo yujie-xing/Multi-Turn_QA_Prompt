@@ -198,6 +198,9 @@ class GPT2forQA(GPT2ForTokenClassification):
 		if target_ids is None and start_positions is None and end_positions is None:
 			lm_logits = self.lm_head(hidden_states)
 			qa_logits = self.classifier(hidden_states)
+			loss_fct = CrossEntropyLoss(ignore_index=self.pad_token_id)
+			loss = loss_fct(lm_logits.view(-1, lm_logits.size(-1)), input_ids.view(-1))
+
 
 		if not return_dict:
 			output = (logits,) + transformer_outputs[2:]

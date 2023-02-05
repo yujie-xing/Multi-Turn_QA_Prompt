@@ -12,7 +12,7 @@ try:
 	print(dataargs)
 except:  ## Only for test
 	print("\n======================\n")
-	args = TrainingArguments(output_dir="test_output", label_names=["target_ids"])
+	args = TrainingArguments(output_dir="test_output")
 	try:
 		mkdir("test_output")
 	except:
