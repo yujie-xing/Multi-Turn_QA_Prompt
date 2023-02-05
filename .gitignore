@@ -11,6 +11,8 @@ requirements
 /prompt_QA_coqa/*
 /prompt_gen
 /prompt_QA_gen/*
+/prompt_instruct/*
+/prompt_QA_instruct/*
 /news/*
 /transformers/
 /prompt_QA_coqa_full/*
