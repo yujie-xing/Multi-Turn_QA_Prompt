@@ -257,9 +257,9 @@ class generate_QA():
 	def decode(self):
 
 		if "coqa" in self.dataargs.test_path:
-			qa_dicts = self.data_processor.data_to_dicts_coqa(self.dataargs.test_path)[:2]
+			qa_dicts = self.data_processor.data_to_dicts_coqa(self.dataargs.test_path)
 		elif "quac" in self.dataargs.test_path:
-			qa_dicts = self.data_processor.data_to_dicts_quac(self.dataargs.test_path)[:2]
+			qa_dicts = self.data_processor.data_to_dicts_quac(self.dataargs.test_path)
 		else:
 			raise Exception("Not coqa nor quac.")
 
