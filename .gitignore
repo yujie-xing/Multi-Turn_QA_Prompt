@@ -8,6 +8,8 @@
 Question_Answering_on_SQUAD.ipynb
 *.out
 requirements
+/prompt_gen_prompt/*
+/prompt_instruct_prompt/*
 /prompt_QA_coqa/*
 /prompt_gen
 /prompt_QA_gen/*

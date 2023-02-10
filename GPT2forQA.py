@@ -238,6 +238,7 @@ class generate_QA():
 		with open(path.join(self.dataargs.model_path,self.dataargs.dataargs_file),'rb') as model_dataargs:
 			self.model_dataargs = pickle.load(model_dataargs)
 		self.data_processor = decode_data()
+		print(self.model_dataargs)
 
 		# Initialize tokenizer
 		self.tokenizer = AutoTokenizer.from_pretrained(dataargs.tokenizer_path)
