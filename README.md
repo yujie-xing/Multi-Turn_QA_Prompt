@@ -4,6 +4,6 @@ Re-produce the prompt methods for multi-turn QA described in https://arxiv.org/a
 
 Please download the dataset folder from https://drive.google.com/drive/folders/1EY4pOoBzsRQhNGGlYzu6iDTMSMgZGs-h?usp=sharing
 
-prompted CoQA and QuAC datasets are included.
+Prompted CoQA and QuAC datasets are included.
 
 PS: Although I added some codes for the longformer model, it is not working as expected. The GPT-2 model works as expected, though.
