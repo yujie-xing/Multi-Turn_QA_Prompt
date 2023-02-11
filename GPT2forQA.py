@@ -291,7 +291,7 @@ class generate_QA():
 				
 				answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "question": qa_dict['question'], "gold": qa_dict['original_answer'], "span": (span_original[0],span_original[1]), "human": qa_dict['human_answer'], "qa_answer": original_context[span_original[0]:span_original[1]], "lm_answer": self.tokenizer.decode(lm_answer)})
 
-#				self.write(qa_dict, span, score, span_original, original_context)
+				# self.write(qa_dict, span, score, span_original, original_context)
 
 		if not self.model_dataargs.only_lm:
 			self.write_coqa_qa_answer(answer_list)
@@ -336,7 +336,7 @@ class generate_QA():
 			else:
 				answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "question": qa_dict['question'], "gold": qa_dict['answer'], "span": (span_original[0],span_original[1]), "human": qa_dict['human_answer'], "qa_answer": qa_dict['context'][span_original[0]:span_original[1]], "lm_answer": self.tokenizer.decode(lm_answer)})
 
-#			self.write(qa_dict, spans[i], scores[i], spans_original[i], qa_dict['original_context'])
+			# self.write(qa_dict, spans[i], scores[i], spans_original[i], qa_dict['original_context'])
 		
 		if not self.model_dataargs.only_lm:
 			self.write_coqa_qa_answer(answer_list)
@@ -443,7 +443,10 @@ class generate_QA_longformer(generate_QA):
 
 		self.args = args
 		self.dataargs = dataargs
+		with open(path.join(self.dataargs.model_path,self.dataargs.dataargs_file),'rb') as model_dataargs:
+			self.model_dataargs = pickle.load(model_dataargs)
 		self.data_processor = decode_data_longformer()
+
 
 		# Initialize tokenizer
 		self.tokenizer = AutoTokenizer.from_pretrained(dataargs.tokenizer_path)
@@ -457,6 +460,81 @@ class generate_QA_longformer(generate_QA):
 			
 		print("Output to {}.\n".format(self.output_path))
 
+	def decode(self):
+
+		# Handles models with QA support. Use evaluate() for models without QA support.
+
+		if "coqa" in self.dataargs.test_path:
+			qa_dicts = self.data_processor.data_to_dicts_coqa(self.dataargs.test_path)
+		elif "quac" in self.dataargs.test_path:
+			qa_dicts = self.data_processor.data_to_dicts_quac(self.dataargs.test_path)
+		else:
+			raise Exception("Not coqa nor quac.")
+
+		answer_list = list()
+
+		for qa_list in qa_dicts:
+
+			span = None
+			previous_qa_dict = None
+
+			original_context = qa_list[0]['context']
+
+			for qa_dict in qa_list:
+				qa_dict = self.data_processor.add_prompt_decode(qa_dict, span, previous_qa_dict)
+				tokenized_qa_dict = self.data_processor.preprocess([qa_dict], self.tokenizer)
+				qa_logits = self.predictor.predict(tokenized_qa_dict).predictions
+				span, score, lm_answer_start, have_span = self.data_processor.postprocess([qa_dict], tokenized_qa_dict, qa_logits, None, False, True, self.dataargs.search_size, self.dataargs.max_answer_length)
+				span_original = self.data_processor.calc_original_span_positions(qa_dict['prompt_positions_original'],span)
+
+				lm_answer = [self.tokenizer.pad_token_id]
+
+				previous_qa_dict = qa_dict
+				
+				answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "question": qa_dict['question'], "gold": qa_dict['original_answer'], "span": (span_original[0],span_original[1]), "human": qa_dict['human_answer'], "qa_answer": original_context[span_original[0]:span_original[1]], "lm_answer": self.tokenizer.decode(lm_answer)})
+
+				# self.write(qa_dict, span, score, span_original, original_context)
+
+		self.write_coqa_qa_answer(answer_list)
+		# self.write_quac_qa_answer(answer_list)
+		print("Decoding finished!")
+
+
+	def evaluate(self):   ## For evaluation of prompted test dataset.
+
+		# Handles models with and without QA support.
+
+		if "prompt" in self.dataargs.test_path:
+			test_dataset = self.data_processor.load(self.dataargs.test_path)
+		else:
+			test_dataset = self.data_processor.data_to_dicts_coqa(self.dataargs.test_path)
+			test_dataset = [qa_dict for qa_list in test_dataset for qa_dict in qa_list]
+			if not self.model_dataargs.only_lm:
+				raise Exception("Use decode().")
+		
+		answer_list = list()
+
+		for qa_dict in test_dataset:
+			tokenized_qa_dict = self.data_processor.preprocess([qa_dict], self.tokenizer)
+			qa_logits = self.predictor.predict(tokenized_qa_dict).predictions
+			span, score, lm_answer_start, have_span = self.data_processor.postprocess([qa_dict], tokenized_qa_dict, qa_logits, None, False, True, self.dataargs.search_size, self.dataargs.max_answer_length)
+
+			span_original = self.data_processor.calc_original_span_positions(qa_dict['prompt_positions_original'],span)
+
+			lm_answer = [self.tokenizer.pad_token_id]
+			
+			if "prompt" in self.dataargs.test_path:
+				answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "question": qa_dict['question'], "gold": qa_dict['original_answer'], "span": (span_original[0],span_original[1]), "human": qa_dict['human_answer'], "qa_answer": qa_dict['original_context'][span_original[0]:span_original[1]], "lm_answer": self.tokenizer.decode(lm_answer)})
+			else:
+				answer_list.append({"id": qa_dict['id'], "turn_id": qa_dict['turn_id'], "question": qa_dict['question'], "gold": qa_dict['answer'], "span": (span_original[0],span_original[1]), "human": qa_dict['human_answer'], "qa_answer": qa_dict['context'][span_original[0]:span_original[1]], "lm_answer": self.tokenizer.decode(lm_answer)})
+
+			# self.write(qa_dict, spans[i], scores[i], spans_original[i], qa_dict['original_context'])
+		
+		self.write_coqa_qa_answer(answer_list)
+		# self.write_quac_qa_answer(answer_list)
+
+
+		print("Evaluation finished!")
 
 
 
