@@ -443,8 +443,8 @@ class generate_QA_longformer(generate_QA):
 
 		self.args = args
 		self.dataargs = dataargs
-		with open(path.join(self.dataargs.model_path,self.dataargs.dataargs_file),'rb') as model_dataargs:
-			self.model_dataargs = pickle.load(model_dataargs)
+		# with open(path.join(self.dataargs.model_path,self.dataargs.dataargs_file),'rb') as model_dataargs:
+		# 	self.model_dataargs = pickle.load(model_dataargs)
 		self.data_processor = decode_data_longformer()
 
 
@@ -483,8 +483,8 @@ class generate_QA_longformer(generate_QA):
 			for qa_dict in qa_list:
 				qa_dict = self.data_processor.add_prompt_decode(qa_dict, span, previous_qa_dict)
 				tokenized_qa_dict = self.data_processor.preprocess([qa_dict], self.tokenizer)
-				qa_logits = self.predictor.predict(tokenized_qa_dict).predictions
-				span, score, lm_answer_start, have_span = self.data_processor.postprocess([qa_dict], tokenized_qa_dict, qa_logits, None, False, True, self.dataargs.search_size, self.dataargs.max_answer_length)
+				start_logits, end_logits = self.predictor.predict(tokenized_qa_dict).predictions
+				span, score = self.data_processor.postprocess([qa_dict], tokenized_qa_dict, start_logits, end_logits, self.dataargs.search_size, self.dataargs.max_answer_length)
 				span_original = self.data_processor.calc_original_span_positions(qa_dict['prompt_positions_original'],span)
 
 				lm_answer = [self.tokenizer.pad_token_id]
@@ -516,8 +516,8 @@ class generate_QA_longformer(generate_QA):
 
 		for qa_dict in test_dataset:
 			tokenized_qa_dict = self.data_processor.preprocess([qa_dict], self.tokenizer)
-			qa_logits = self.predictor.predict(tokenized_qa_dict).predictions
-			span, score, lm_answer_start, have_span = self.data_processor.postprocess([qa_dict], tokenized_qa_dict, qa_logits, None, False, True, self.dataargs.search_size, self.dataargs.max_answer_length)
+			start_logits, end_logits = self.predictor.predict(tokenized_qa_dict).predictions
+			span, score = self.data_processor.postprocess([qa_dict], tokenized_qa_dict, start_logits, end_logits, self.dataargs.search_size, self.dataargs.max_answer_length)
 
 			span_original = self.data_processor.calc_original_span_positions(qa_dict['prompt_positions_original'],span)
 

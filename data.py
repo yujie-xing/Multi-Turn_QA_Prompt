@@ -780,25 +780,133 @@ class decode_data_longformer(decode_data):
 
 		return Dataset.from_dict(tokenized_examples)
 
+	def postprocess(self, dataset, tokenized_dataset, start_logits, end_logits, search_size = 20, max_answer_length = None):
+
+		# Build a map example to its corresponding features.
+		dataset_id_to_index = {qa_dict['id']+str(qa_dict['turn_id']): i for i, qa_dict in enumerate(dataset)}
+		overflow_mapping = {i: list() for i in range(len(dataset))}
+		for i, tokenized_data in enumerate(tokenized_dataset):
+			overflow_mapping[dataset_id_to_index[tokenized_data["ids"]+str(tokenized_data["turn_ids"])]].append(i)
+
+		# The dictionaries we have to fill.
+		spans = list()
+		scores = list()
+
+		# Let's loop over all the examples!
+		for dataset_index, qa_dict in enumerate(dataset):
+			# Those are the indices of the features associated to the current example.
+
+			tokenized_indices = overflow_mapping[dataset_index]
+
+			predicted_spans = []
+			predicted_scores = []
+			prompt_chars = list()
+
+			prompt_positions = qa_dict['prompt_positions']
+			for prompt in prompt_positions:
+				if prompt[2] == 'start':
+					for prompt_char in range(prompt[0],prompt[1]):
+						prompt_chars.append(prompt_char)
+				elif prompt[2] == 'end':
+					for prompt_char in range(prompt[0],prompt[1]):
+						prompt_chars.append(prompt_char)
+
+			# Looping through all the features associated to the current example.
+			for tokenized_index in tokenized_indices:
+				# We grab the predictions of the model for this feature.
+				start_logit = start_logits[tokenized_index]
+				end_logit = end_logits[tokenized_index]
+				# This is what will allow us to map the positions in our logits to span of texts in the original
+				# context.
+				offset_mapping = tokenized_dataset[tokenized_index]["offset_mappings"]
+
+				# Update minimum null prediction.
+				# eos_index = offset_mapping.index([-1,-1])
+				null_index = offset_mapping.index([-1,-1])
+				null_score = start_logit[null_index] + end_logit[null_index]
+
+				best_score = null_score
+				best_answer = (-1,-1)
+
+				# Go through all possibilities for the `n_best_size` greater start and end logits.
+				start_indices = argsort(start_logit)[::-1][:search_size].tolist()
+				end_indices = argsort(end_logit)[::-1][:search_size].tolist()
+
+				for start_index in start_indices:
+					for end_index in end_indices:
+						# Don't consider out-of-scope answers, either because the indices are out of bounds or correspond
+						# to part of the input_ids that are not in the context.
+						if (end_index < start_index
+							or start_index >= len(offset_mapping)
+							or end_index >= len(offset_mapping)
+							or offset_mapping[start_index] is None
+							or offset_mapping[end_index] is None
+						):
+							continue
+						# Don't consider answers with a length that is either < 0 or > max_answer_length.
+						if max_answer_length is not None:
+							if end_index - start_index + 1 > max_answer_length:
+								continue
+
+						start_char = offset_mapping[start_index][0]
+						end_char = offset_mapping[end_index][1]
+
+						while start_char in prompt_chars:
+							start_char += 1
+						while end_char in prompt_chars:
+							end_char -= 1
+
+						predicted_score = start_logit[start_index] + end_logit[end_index]
+
+						if predicted_score > best_score:
+							best_score = predicted_score
+							best_answer = (start_char, end_char)
+
+				predicted_spans.append(best_answer)
+				predicted_scores.append(best_score)
+			
+			if len(predicted_spans) == 1:
+				span = predicted_spans[0]
+				score = predicted_scores[0]
+			else:
+				span = (-1,-1)
+				score = max(predicted_scores)
+				predicted_scores = array(predicted_scores)
+				best_score_index = argsort(predicted_scores)
+				for score_index in best_score_index:
+					if predicted_spans[score_index] != (-1,-1):
+						span = predicted_spans[score_index]
+						score = predicted_scores[score_index]
+
+			if len(dataset) == 1:
+				return span, score
+			else:
+				spans.append(span)
+				scores.append(score)
+
+		return spans, scores
+
+
 
 def train_dev_test(coqa_path):
-	data_processor = train_data()
-	# test_data_processor = decode_data_longformer()
+	data_processor = train_data_longformer()
+	test_data_processor = decode_data_longformer()
 	train_dataset = data_processor.load(coqa_path)
 
 	# Initialize tokenizer
-	tokenizer = AutoTokenizer.from_pretrained('gpt2')
+	# tokenizer = AutoTokenizer.from_pretrained('gpt2')
 	# tokenizer.pad_token = tokenizer.eos_token
-	special_tokens_dict = {'pad_token': '<|pad|>'}
-	tokenizer.add_special_tokens(special_tokens_dict)
-	# tokenizer = AutoTokenizer.from_pretrained("mrm8488/longformer-base-4096-finetuned-squadv2")
+	# special_tokens_dict = {'pad_token': '<|pad|>'}
+	# tokenizer.add_special_tokens(special_tokens_dict)
+	tokenizer = AutoTokenizer.from_pretrained("mrm8488/longformer-base-4096-finetuned-squadv2")
 	# sharp_id = tokenizer.vocab["<"]
 	# space_sharp_id = tokenizer.vocab["Ġ<"]
 
 	# Tokenize dataset & prepared labels
 	instruction = "Answer the question based on the given passage."
-	tokenized_train_dataset = data_processor.preprocess(train_dataset[:2], tokenizer, True, False, instruction, 924, 128)
-	# tokenized_test_dataset = test_data_processor.preprocess(train_dataset[:1], tokenizer, 1020, 128, sharp_id)
+	tokenized_train_dataset = data_processor.preprocess(train_dataset[:2000], tokenizer)
+	# tokenized_train_dataset = data_processor.preprocess(train_dataset[:2], tokenizer, True, False, instruction, 924, 128)
+	tokenized_test_dataset = test_data_processor.preprocess(train_dataset[:2000], tokenizer)
 
 	# print(tokenized_train_dataset['input_ids'])
 	# print()
@@ -808,73 +916,74 @@ def train_dev_test(coqa_path):
 	# print()
 	# print(tokenized_train_dataset['token_type_ids'])
 
-	num = 0
+	num = 1900
 
 	# print(tokenized_train_dataset["input_ids"][num]==tokenized_test_dataset["input_ids"][num])
 
-	print(tokenizer(["[Instruction]:\n", instruction, "\n[Question]:\n"])['input_ids'])
-	print(tokenizer("\n[Passage]:\n")['input_ids'])
-	print(tokenizer("\n[Answer]:\n")['input_ids'])
-	print("\ninput_ids: \n")
-	print(tokenized_train_dataset['input_ids'])
-	print(tokenized_train_dataset['target_ids'])
-	print(tokenized_train_dataset['attention_mask'])
-	print(tokenized_train_dataset['token_type_ids'])
+	# print(tokenizer(["[Instruction]:\n", instruction, "\n[Question]:\n"])['input_ids'])
+	# print(tokenizer("\n[Passage]:\n")['input_ids'])
+	# print(tokenizer("\n[Answer]:\n")['input_ids'])
+	# print("\ninput_ids: \n")
+	# print(tokenized_train_dataset['input_ids'])
+	# print(tokenized_train_dataset['target_ids'])
+	# print(tokenized_train_dataset['attention_mask'])
+	# print(tokenized_train_dataset['token_type_ids'])
 
-	print(len(tokenized_train_dataset['input_ids'][num]))
-	print(len(tokenized_train_dataset['target_ids'][num]))
-	print(len(tokenized_train_dataset['attention_mask'][num]))
-	print(len(tokenized_train_dataset['token_type_ids'][num]))
+	# print(len(tokenized_train_dataset['input_ids'][num]))
+	# print(len(tokenized_train_dataset['target_ids'][num]))
+	# print(len(tokenized_train_dataset['attention_mask'][num]))
+	# print(len(tokenized_train_dataset['token_type_ids'][num]))
 
 	print(train_dataset[num]['context'][train_dataset[num]['answer_span'][0]:train_dataset[num]['answer_span'][1]])
 	print(tokenizer.decode(tokenized_train_dataset[num]['input_ids'][tokenized_train_dataset[num]['start_positions']:tokenized_train_dataset[num]['end_positions']+1]))
+	print(train_dataset[num]['context'][tokenized_test_dataset[num]['offset_mappings'][tokenized_train_dataset[num]['start_positions']][0]:tokenized_test_dataset[num]['offset_mappings'][tokenized_train_dataset[num]['end_positions']][1]])
 
 
 
 
-# def decode_test(quac_path):
+def decode_test(quac_path):
 
-# 	data = decode_data_longformer()
+	data = decode_data_longformer()
 
-# 	tokenizer = AutoTokenizer.from_pretrained("mrm8488/longformer-base-4096-finetuned-squadv2")
-# 	# tokenizer = AutoTokenizer.from_pretrained('gpt2')
-# 	# tokenizer.pad_token = tokenizer.eos_token
-# 	# special_tokens_dict = {'pad_token': '<|paddingtokencustomized|>'}
-# 	# tokenizer.add_special_tokens(special_tokens_dict)
-# 	sharp_id = tokenizer.vocab["<"]
-# 	space_sharp_id = tokenizer.vocab["Ġ<"]
+	tokenizer = AutoTokenizer.from_pretrained("mrm8488/longformer-base-4096-finetuned-squadv2")
+	# tokenizer = AutoTokenizer.from_pretrained('gpt2')
+	# tokenizer.pad_token = tokenizer.eos_token
+	# special_tokens_dict = {'pad_token': '<|paddingtokencustomized|>'}
+	# tokenizer.add_special_tokens(special_tokens_dict)
+	sharp_id = tokenizer.vocab["<"]
+	space_sharp_id = tokenizer.vocab["Ġ<"]
 
-# 	qa_dicts = data.data_to_dicts_quac(quac_path)
+	qa_dicts = data.data_to_dicts_quac(quac_path)
 
-# 	qa_list = qa_dicts[2409]
-# 	print(len(qa_list))
+	qa_list = qa_dicts[2409]
+	print(len(qa_list))
 
-# 	qa_dict = qa_list[0]
-# 	previous_qa_dict = None
-# 	predicted_span = None
-# 	original_context = qa_dict['context']
-# 	print(qa_dict)
-# 	print()
+	qa_dict = qa_list[0]
+	previous_qa_dict = None
+	predicted_span = None
+	original_context = qa_dict['context']
+	print(qa_dict)
+	print()
 	
-# 	for i, qa_dict in enumerate(qa_list):
-# 		print(qa_dict['turn_id'])
-# 		qa_dict = data.add_prompt_decode(qa_dict, predicted_span, previous_qa_dict)
+	for i, qa_dict in enumerate(qa_list):
+		print(qa_dict['turn_id'])
+		qa_dict = data.add_prompt_decode(qa_dict, predicted_span, previous_qa_dict)
 
-# 		tokenized_qa_dict = data.preprocess([qa_dict], tokenizer, 1020, 128, sharp_id, space_sharp_id)
+		tokenized_qa_dict = data.preprocess([qa_dict], tokenizer, 1020, 128, sharp_id, space_sharp_id)
 
-# 		span = qa_dict['answer_span']  # simulating predicted span
-# 		original_span = data.calc_original_span_positions(qa_dict['prompt_positions_original'],span)
-# 		prompt_positions = qa_dict['prompt_positions']
-# 		print(qa_dict['original_answer'])
-# 		print(original_context[original_span[0]:original_span[1]])
-# 		print(qa_dict['context'][span[0]:span[1]])
-# 		print(span)
-# 		# print(qa_dict['context'])
-# 		for prompt in prompt_positions:
-# 			print(qa_dict['context'][prompt[0]:prompt[1]])
-# 		print()
-# 		previous_qa_dict = qa_dict
-# 		predicted_span = previous_qa_dict['answer_span']
+		span = qa_dict['answer_span']  # simulating predicted span
+		original_span = data.calc_original_span_positions(qa_dict['prompt_positions_original'],span)
+		prompt_positions = qa_dict['prompt_positions']
+		print(qa_dict['original_answer'])
+		print(original_context[original_span[0]:original_span[1]])
+		print(qa_dict['context'][span[0]:span[1]])
+		print(span)
+		# print(qa_dict['context'])
+		for prompt in prompt_positions:
+			print(qa_dict['context'][prompt[0]:prompt[1]])
+		print()
+		previous_qa_dict = qa_dict
+		predicted_span = previous_qa_dict['answer_span']
 
 
 
@@ -891,6 +1000,6 @@ if __name__ == "__main__":
 	quac_dev_path = 'dataset/quac-dev.json'
 	quac_train_prompted_path = 'dataset/quac-train-prompted.json'
 
-	train_dev_test(coqa_train_prompted_path)
+	train_dev_test(quac_train_prompted_path)
 
 	# decode_test(quac_train_path)

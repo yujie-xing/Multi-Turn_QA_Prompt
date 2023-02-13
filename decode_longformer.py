@@ -17,7 +17,7 @@ except:  ## Only for test
 		mkdir("test_output")
 	except:
 		pass
-	dataargs = DataArguments(test_path='dataset/coqa-dev-prompted.json', tokenizer_path='test/tokenizer', model_path='test')
+	dataargs = DataArguments(test_path='dataset/coqa-dev-prompted.json', tokenizer_path="mrm8488/longformer-base-4096-finetuned-squadv2", model_path="mrm8488/longformer-base-4096-finetuned-squadv2", evaluate=True)
 	print("Test Mode")
 	print(args)
 	print(dataargs)
